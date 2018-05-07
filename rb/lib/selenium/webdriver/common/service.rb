@@ -1,5 +1,3 @@
-# encoding: utf-8
-#
 # Licensed to the Software Freedom Conservancy (SFC) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -45,11 +43,11 @@ module Selenium
 
       attr_accessor :host
 
-      def initialize(executable_path, port, *extra_args)
+      def initialize(executable_path, port, driver_opts)
         @executable_path = binary_path(executable_path)
         @host            = Platform.localhost
         @port            = Integer(port)
-        @extra_args      = extra_args
+        @extra_args      = extract_service_args(driver_opts)
 
         raise Error::WebDriverError, "invalid port: #{@port}" if @port < 1
       end
@@ -89,6 +87,19 @@ module Selenium
 
       private
 
+      def build_process(*command)
+        WebDriver.logger.debug("Executing Process #{command}")
+        @process = ChildProcess.build(*command)
+        if WebDriver.logger.debug?
+          @process.io.stdout = @process.io.stderr = WebDriver.logger.io
+        elsif Platform.jruby?
+          # Apparently we need to read the output of drivers on JRuby.
+          @process.io.stdout = @process.io.stderr = File.new(Platform.null_device, 'w')
+        end
+
+        @process
+      end
+
       def connect_to_server
         Net::HTTP.start(@host, @port) do |http|
           http.open_timeout = STOP_TIMEOUT / 2
@@ -109,6 +120,7 @@ module Selenium
       def stop_process
         return if process_exited?
         @process.stop STOP_TIMEOUT
+        @process.io.stdout.close if Platform.jruby? && !WebDriver.logger.debug?
       end
 
       def stop_server
@@ -137,6 +149,13 @@ module Selenium
       def socket_lock
         @socket_lock ||= SocketLock.new(@port - 1, SOCKET_LOCK_TIMEOUT)
       end
+
+      protected
+
+      def extract_service_args(driver_opts)
+        driver_opts.key?(:args) ? driver_opts.delete(:args) : []
+      end
+
     end # Service
   end # WebDriver
 end # Selenium

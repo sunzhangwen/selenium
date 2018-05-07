@@ -24,15 +24,14 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-
-import com.beust.jcommander.JCommander;
-
 import org.junit.Test;
-import org.openqa.grid.internal.listeners.Prioritizer;
+import org.openqa.grid.internal.cli.GridHubCliOptions;
+import org.openqa.selenium.json.Json;
+import org.openqa.selenium.json.JsonInput;
 
-import java.util.Map;
+import java.io.IOException;
+import java.io.Reader;
+import java.io.StringReader;
 
 public class GridHubConfigurationTest {
 
@@ -66,7 +65,6 @@ public class GridHubConfigurationTest {
     assertEquals(GridHubConfiguration.DEFAULT_TIMEOUT, ghc.timeout);
     assertEquals(GridHubConfiguration.DEFAULT_BROWSER_TIMEOUT, ghc.browserTimeout);
     assertFalse(ghc.debug);
-    assertFalse(ghc.help);
     assertNull(ghc.jettyMaxThreads);
     assertNull(ghc.log);
   }
@@ -94,16 +92,18 @@ public class GridHubConfigurationTest {
     assertEquals(expected.timeout, actual.timeout);
     assertEquals(expected.browserTimeout, actual.browserTimeout);
     assertEquals(expected.debug, actual.debug);
-    assertEquals(expected.help, actual.help);
     assertEquals(expected.jettyMaxThreads, actual.jettyMaxThreads);
     assertEquals(expected.log, actual.log);
   }
 
   @Test
-  public void testLoadFromJson() {
-    JsonObject json = new JsonParser()
-      .parse("{ \"host\": \"dummyhost\", \"port\": 1234 }").getAsJsonObject();
-    GridHubConfiguration ghc = GridHubConfiguration.loadFromJSON(json);
+  public void testLoadFromJson() throws IOException {
+    GridHubConfiguration ghc;
+
+    try (Reader reader = new StringReader("{ \"host\": \"dummyhost\", \"port\": 1234 }");
+        JsonInput jsonInput = new Json().newInput(reader)) {
+          ghc = GridHubConfiguration.loadFromJson(jsonInput, GridHubConfiguration.class);
+    }
 
     assertEquals("hub", ghc.role);
     assertEquals(1234, ghc.port.intValue());
@@ -115,12 +115,7 @@ public class GridHubConfigurationTest {
   public void testMergeWithRealValues() {
     GridHubConfiguration ghc = new GridHubConfiguration();
     GridHubConfiguration other = new GridHubConfiguration();
-    other.prioritizer = new Prioritizer() {
-      @Override
-      public int compareTo(Map<String, Object> a, Map<String, Object> b) {
-        return 0;
-      }
-    };
+    other.prioritizer = (a, b) -> 0;
     other.hubConfig = "foo.json";
     other.throwOnCapabilityNotPresent = false;
     other.newSessionWaitTimeout = 100;
@@ -178,7 +173,7 @@ public class GridHubConfigurationTest {
     ghc = new GridHubConfiguration();
     String[] args = ("-servlet com.foo.bar.ServletA -servlet com.foo.bar.ServletB"
                      + " -custom foo=bar,bar=baz").split(" ");
-    new JCommander(ghc, args);
+    ghc = new GridHubCliOptions().parse(args).toConfiguration();
 
     assertTrue(ghc.toString().contains("-servlets com.foo.bar.ServletA"
                                        + " -servlets com.foo.bar.ServletB"));
@@ -191,8 +186,7 @@ public class GridHubConfigurationTest {
   public void testJcommanderConverterCapabilityMatcher() {
     String[] hubArgs = {"-capabilityMatcher", "org.openqa.grid.internal.utils.DefaultCapabilityMatcher",
                         "-prioritizer", "org.openqa.grid.internal.utils.configuration.PlaceHolderTestingPrioritizer"};
-    GridHubConfiguration ghc = new GridHubConfiguration();
-    new JCommander(ghc, hubArgs);
+    GridHubConfiguration ghc = new GridHubCliOptions().parse(hubArgs).toConfiguration();
     assertEquals("org.openqa.grid.internal.utils.DefaultCapabilityMatcher",
                  ghc.capabilityMatcher.getClass().getCanonicalName());
     assertEquals("org.openqa.grid.internal.utils.configuration.PlaceHolderTestingPrioritizer",

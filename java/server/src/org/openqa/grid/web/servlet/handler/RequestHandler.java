@@ -17,16 +17,20 @@
 
 package org.openqa.grid.web.servlet.handler;
 
+import com.google.common.collect.ImmutableMap;
+
 import org.openqa.grid.common.exception.ClientGoneException;
 import org.openqa.grid.common.exception.GridException;
 import org.openqa.grid.internal.ExternalSessionKey;
-import org.openqa.grid.internal.Registry;
+import org.openqa.grid.internal.GridRegistry;
 import org.openqa.grid.internal.RemoteProxy;
 import org.openqa.grid.internal.SessionTerminationReason;
 import org.openqa.grid.internal.TestSession;
 import org.openqa.grid.internal.exception.NewSessionException;
 import org.openqa.grid.internal.listeners.TestSessionListener;
+import org.openqa.grid.internal.utils.configuration.GridHubConfiguration;
 import org.openqa.selenium.remote.DesiredCapabilities;
+import org.openqa.selenium.remote.NewSessionPayload;
 
 import java.io.IOException;
 import java.net.SocketTimeoutException;
@@ -48,29 +52,26 @@ import javax.servlet.http.HttpServletResponse;
 @SuppressWarnings("JavaDoc")
 public class RequestHandler implements Comparable<RequestHandler> {
 
-  private final Registry registry;
+  private static final Logger log = Logger.getLogger(RequestHandler.class.getName());
+
+  private final GridRegistry registry;
   private final SeleniumBasedRequest request;
   private final HttpServletResponse response;
 
-  private volatile TestSession session = null;
-
-
   private final CountDownLatch sessionAssigned = new CountDownLatch(1);
-
-  private static final Logger log = Logger.getLogger(RequestHandler.class.getName());
   private final Thread waitingThread;
 
+  private volatile TestSession session = null;
 
-
-
-  public  RequestHandler(SeleniumBasedRequest request, HttpServletResponse response,
-      Registry registry) {
+  public  RequestHandler(
+      SeleniumBasedRequest request,
+      HttpServletResponse response,
+      GridRegistry registry) {
     this.request = request;
     this.response = response;
     this.registry = registry;
     this.waitingThread = Thread.currentThread();
   }
-
 
 
   /**
@@ -82,7 +83,11 @@ public class RequestHandler implements Comparable<RequestHandler> {
    */
   public void forwardNewSessionRequestAndUpdateRegistry(TestSession session)
       throws NewSessionException {
-    try {
+    try (NewSessionPayload payload = NewSessionPayload.create(
+        ImmutableMap.of("desiredCapabilities", session.getRequestedCapabilities()))) {
+      StringBuilder json = new StringBuilder();
+      payload.writeTo(json);
+      request.setBody(json.toString());
       session.forward(getRequest(), getResponse(), true);
     } catch (IOException e) {
       //log.warning("Error forwarding the request " + e.getMessage());
@@ -109,6 +114,7 @@ public class RequestHandler implements Comparable<RequestHandler> {
           forwardNewSessionRequestAndUpdateRegistry(session);
         } catch (Exception e) {
           cleanup();
+          log.log(Level.INFO, "Error forwarding the new session " + e.getMessage(), e);
           throw new GridException("Error forwarding the new session " + e.getMessage(), e);
         }
         break;
@@ -183,8 +189,9 @@ public class RequestHandler implements Comparable<RequestHandler> {
   public void waitForSessionBound() throws InterruptedException, TimeoutException {
     // Maintain compatibility with Grid 1.x, which had the ability to
     // specify how long to wait before canceling a request.
-    Integer newSessionWaitTimeout = registry.getConfiguration().newSessionWaitTimeout != null ?
-                                    registry.getConfiguration().newSessionWaitTimeout : 0;
+    GridHubConfiguration configuration = getRegistry().getHub().getConfiguration();
+    Integer newSessionWaitTimeout = configuration.newSessionWaitTimeout != null ?
+                                    configuration.newSessionWaitTimeout : 0;
     if (newSessionWaitTimeout > 0) {
       if (!sessionAssigned.await(newSessionWaitTimeout.longValue(), TimeUnit.MILLISECONDS)) {
         throw new TimeoutException("Request timed out waiting for a node to become available.");
@@ -210,9 +217,11 @@ public class RequestHandler implements Comparable<RequestHandler> {
   }
 
   public int compareTo(RequestHandler o) {
-    if (registry.getConfiguration().prioritizer != null) {
-      return registry.getConfiguration().prioritizer.compareTo(this.getRequest().getDesiredCapabilities(), o.getRequest()
-          .getDesiredCapabilities());
+    GridHubConfiguration configuration = getRegistry().getHub().getConfiguration();
+    if (configuration.prioritizer != null) {
+      return configuration.prioritizer.compareTo(
+          this.getRequest().getDesiredCapabilities(),
+          o.getRequest().getDesiredCapabilities());
     }
     return 0;
   }
@@ -298,7 +307,7 @@ public class RequestHandler implements Comparable<RequestHandler> {
     return true;
   }
 
-  public Registry getRegistry() {
+  public GridRegistry getRegistry() {
     return registry;
   }
 }

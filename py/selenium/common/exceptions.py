@@ -124,6 +124,9 @@ class StaleElementReferenceException(WebDriverException):
 
 class InvalidElementStateException(WebDriverException):
     """
+    Thrown when a command could not be completed because the element is in an invalid state.
+
+    This can be caused by attempting to clear an element that isn't both editable and resettable.
     """
     pass
 
@@ -160,6 +163,14 @@ class ElementNotVisibleException(InvalidElementStateException):
 
     Most commonly encountered when trying to click or read text
     of an element that is hidden from view.
+    """
+    pass
+
+
+class ElementNotInteractableException(InvalidElementStateException):
+    """
+    Thrown when an element is present in the DOM but interactions
+    with that element will hit another element do to paint order
     """
     pass
 
@@ -238,5 +249,79 @@ class ImeNotAvailableException(WebDriverException):
 class ImeActivationFailedException(WebDriverException):
     """
     Thrown when activating an IME engine has failed.
+    """
+    pass
+
+
+class InvalidArgumentException(WebDriverException):
+    """
+    The arguments passed to a command are either invalid or malformed.
+    """
+    pass
+
+
+class JavascriptException(WebDriverException):
+    """
+    An error occurred while executing JavaScript supplied by the user.
+    """
+    pass
+
+
+class NoSuchCookieException(WebDriverException):
+    """
+    No cookie matching the given path name was found amongst the associated cookies of the
+    current browsing context's active document.
+    """
+    pass
+
+
+class ScreenshotException(WebDriverException):
+    """
+    A screen capture was made impossible.
+    """
+    pass
+
+
+class ElementClickInterceptedException(WebDriverException):
+    """
+    The Element Click command could not be completed because the element receiving the events
+    is obscuring the element that was requested clicked.
+    """
+    pass
+
+
+class InsecureCertificateException(WebDriverException):
+    """
+    Navigation caused the user agent to hit a certificate warning, which is usually the result
+    of an expired or invalid TLS certificate.
+    """
+    pass
+
+
+class InvalidCoordinatesException(WebDriverException):
+    """
+    The coordinates provided to an interactions operation are invalid.
+    """
+    pass
+
+
+class InvalidSessionIdException(WebDriverException):
+    """
+    Occurs if the given session id is not in the list of active sessions, meaning the session
+    either does not exist or that it's not active.
+    """
+    pass
+
+
+class SessionNotCreatedException(WebDriverException):
+    """
+    A new session could not be created.
+    """
+    pass
+
+
+class UnknownMethodException(WebDriverException):
+    """
+    The requested command matched a known URL but did not match an method for that URL.
     """
     pass

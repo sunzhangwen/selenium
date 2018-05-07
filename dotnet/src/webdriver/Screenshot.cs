@@ -1,4 +1,4 @@
-﻿// <copyright file="Screenshot.cs" company="WebDriver Committers">
+// <copyright file="Screenshot.cs" company="WebDriver Committers">
 // Licensed to the Software Freedom Conservancy (SFC) under one
 // or more contributor license agreements. See the NOTICE file
 // distributed with this work for additional information
@@ -17,8 +17,11 @@
 // </copyright>
 
 using System;
+#if NETCOREAPP2_0 || NETSTANDARD2_0
+#else
 using System.Drawing;
 using System.Drawing.Imaging;
+#endif
 using System.IO;
 
 namespace OpenQA.Selenium
@@ -90,6 +93,16 @@ namespace OpenQA.Selenium
         }
 
         /// <summary>
+        /// Saves the screenshot to a Portable Network Graphics (PNG) file, overwriting the
+        /// file if it already exists.
+        /// </summary>
+        /// <param name="fileName">The full path and file name to save the screenshot to.</param>
+        public void SaveAsFile(string fileName)
+        {
+            this.SaveAsFile(fileName, ScreenshotImageFormat.Png);
+        }
+
+        /// <summary>
         /// Saves the screenshot to a file, overwriting the file if it already exists.
         /// </summary>
         /// <param name="fileName">The full path and file name to save the screenshot to.</param>
@@ -97,22 +110,26 @@ namespace OpenQA.Selenium
         /// to save the image to.</param>
         public void SaveAsFile(string fileName, ScreenshotImageFormat format)
         {
-            this.SaveAsFile(fileName, ConvertScreenshotImageFormat(format));
-        }
+#if NETCOREAPP2_0 || NETSTANDARD2_0
+            if (format != ScreenshotImageFormat.Png)
+            {
+                throw new WebDriverException(".NET Core does not support image manipulation, so only Portable Network Graphics (PNG) format is supported");
+            }
+#endif
 
-        /// <summary>
-        /// Saves the screenshot to a file, overwriting the file if it already exists.
-        /// </summary>
-        /// <param name="fileName">The full path and file name to save the screenshot to.</param>
-        /// <param name="format">A <see cref="System.Drawing.Imaging.ImageFormat"/> object indicating the format
-        /// to save the image to.</param>
-        [Obsolete("System.Drawing.Imaging.ImageFormat is not supported in .NET Core, and depending on it is being removed from WebDriver. Please convert to ScreenshotImageFormat.")]
-        public void SaveAsFile(string fileName, ImageFormat format)
-        {
             using (MemoryStream imageStream = new MemoryStream(this.byteArray))
             {
-                Image screenshotImage = Image.FromStream(imageStream);
-                screenshotImage.Save(fileName, format);
+                using (FileStream fileStream = new FileStream(fileName, FileMode.Create))
+                { 
+#if NETCOREAPP2_0 || NETSTANDARD2_0
+                    imageStream.WriteTo(fileStream);
+#else
+                    using (Image screenshotImage = Image.FromStream(imageStream))
+                    {
+                        screenshotImage.Save(fileStream, ConvertScreenshotImageFormat(format));
+                    }
+#endif
+                }
             }
         }
 
@@ -125,6 +142,8 @@ namespace OpenQA.Selenium
             return this.base64Encoded;
         }
 
+#if NETCOREAPP2_0 || NETSTANDARD2_0
+#else
         private static ImageFormat ConvertScreenshotImageFormat(ScreenshotImageFormat format)
         {
             ImageFormat returnedFormat = ImageFormat.Png;
@@ -149,5 +168,6 @@ namespace OpenQA.Selenium
 
             return returnedFormat;
         }
+#endif
     }
 }

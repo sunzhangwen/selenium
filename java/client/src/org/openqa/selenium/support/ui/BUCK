@@ -1,3 +1,4 @@
+# BUILD FILE SYNTAX: SKYLARK
 java_library(name = 'clock',
   srcs = [
     'Clock.java',
@@ -19,7 +20,6 @@ java_library(name = 'components',
   deps = [
     ':clock',
     '//java/client/src/org/openqa/selenium:selenium',
-    '//third_party/java/junit:junit',
   ],
   visibility = ['PUBLIC'],
 )

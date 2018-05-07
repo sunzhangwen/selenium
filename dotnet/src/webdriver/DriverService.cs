@@ -1,4 +1,4 @@
-﻿// <copyright file="DriverService.cs" company="WebDriver Committers">
+// <copyright file="DriverService.cs" company="WebDriver Committers">
 // Licensed to the Software Freedom Conservancy (SFC) under one
 // or more contributor license agreements. See the NOTICE file
 // distributed with this work for additional information
@@ -34,9 +34,11 @@ namespace OpenQA.Selenium
     {
         private string driverServicePath;
         private string driverServiceExecutableName;
+        private string driverServiceHostName = "localhost";
         private int driverServicePort;
         private bool silent;
         private bool hideCommandPromptWindow;
+        private bool isDisposed;
         private Process driverServiceProcess;
 
         /// <summary>
@@ -75,7 +77,21 @@ namespace OpenQA.Selenium
         /// </summary>
         public Uri ServiceUrl
         {
-            get { return new Uri(string.Format(CultureInfo.InvariantCulture, "http://localhost:{0}", this.driverServicePort)); }
+            get { return new Uri(string.Format(CultureInfo.InvariantCulture, "http://{0}:{1}", this.driverServiceHostName, this.driverServicePort)); }
+        }
+
+        /// <summary>
+        /// Gets or sets the host name of the service. Defaults to "localhost."
+        /// </summary>
+        /// <remarks>
+        /// Most driver service executables do not allow connections from remote
+        /// (non-local) machines. This property can be used as a workaround so
+        /// that an IP address (like "127.0.0.1" or "::1") can be used instead.
+        /// </remarks>
+        public string HostName
+        {
+            get { return this.driverServiceHostName; }
+            set { this.driverServiceHostName = value; }
         }
 
         /// <summary>
@@ -174,6 +190,15 @@ namespace OpenQA.Selenium
         }
 
         /// <summary>
+        /// Gets a value indicating whether the service has a shutdown API that can be called to terminate
+        /// it gracefully before forcing a termination.
+        /// </summary>
+        protected virtual bool HasShutdown
+        {
+            get { return true; }
+        }
+
+        /// <summary>
         /// Gets a value indicating whether the service is responding to HTTP requests.
         /// </summary>
         protected virtual bool IsInitialized
@@ -261,9 +286,14 @@ namespace OpenQA.Selenium
         /// <param name="disposing"><see langword="true"/> if the Dispose method was explicitly called; otherwise, <see langword="false"/>.</param>
         protected virtual void Dispose(bool disposing)
         {
-            if (disposing)
+            if (!this.isDisposed)
             {
-                this.Stop();
+                if (disposing)
+                {
+                    this.Stop();
+                }
+
+                this.isDisposed = true;
             }
         }
 
@@ -275,25 +305,28 @@ namespace OpenQA.Selenium
         {
             if (this.IsRunning)
             {
-                Uri shutdownUrl = new Uri(this.ServiceUrl, "/shutdown");
-                DateTime timeout = DateTime.Now.Add(this.TerminationTimeout);
-                while (this.IsRunning && DateTime.Now < timeout)
+                if (this.HasShutdown)
                 {
-                    try
+                    Uri shutdownUrl = new Uri(this.ServiceUrl, "/shutdown");
+                    DateTime timeout = DateTime.Now.Add(this.TerminationTimeout);
+                    while (this.IsRunning && DateTime.Now < timeout)
                     {
-                        // Issue the shutdown HTTP request, then wait a short while for
-                        // the process to have exited. If the process hasn't yet exited,
-                        // we'll retry. We wait for exit here, since catching the exception
-                        // for a failed HTTP request due to a closed socket is particularly
-                        // expensive.
-                        HttpWebRequest request = HttpWebRequest.Create(shutdownUrl) as HttpWebRequest;
-                        request.KeepAlive = false;
-                        HttpWebResponse response = request.GetResponse() as HttpWebResponse;
-                        response.Close();
-                        this.driverServiceProcess.WaitForExit(3000);
-                    }
-                    catch (WebException)
-                    {
+                        try
+                        {
+                            // Issue the shutdown HTTP request, then wait a short while for
+                            // the process to have exited. If the process hasn't yet exited,
+                            // we'll retry. We wait for exit here, since catching the exception
+                            // for a failed HTTP request due to a closed socket is particularly
+                            // expensive.
+                            HttpWebRequest request = HttpWebRequest.Create(shutdownUrl) as HttpWebRequest;
+                            request.KeepAlive = false;
+                            HttpWebResponse response = request.GetResponse() as HttpWebResponse;
+                            response.Close();
+                            this.driverServiceProcess.WaitForExit(3000);
+                        }
+                        catch (WebException)
+                        {
+                        }
                     }
                 }
 

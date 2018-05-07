@@ -20,6 +20,7 @@ package org.openqa.selenium;
 import static org.hamcrest.Matchers.anyOf;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.assertEquals;
@@ -28,16 +29,13 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeFalse;
-import static org.openqa.selenium.testing.Driver.HTMLUNIT;
-import static org.openqa.selenium.testing.Driver.MARIONETTE;
+import static org.openqa.selenium.testing.Driver.SAFARI;
+import static org.openqa.selenium.testing.TestUtilities.catchThrowable;
 
 import org.junit.Test;
 import org.openqa.selenium.support.ui.ExpectedConditions;
-import org.openqa.selenium.testing.Ignore;
 import org.openqa.selenium.testing.JUnit4TestBase;
-import org.openqa.selenium.testing.JavascriptEnabled;
 import org.openqa.selenium.testing.NotYetImplemented;
 import org.openqa.selenium.testing.TestUtilities;
 
@@ -84,7 +82,6 @@ public class ElementAttributeTest extends JUnit4TestBase {
     assertThat(body.getAttribute("style"), equalTo(""));
   }
 
-  @Ignore({MARIONETTE})
   @Test
   public void testShouldReturnTheValueOfTheDisabledAttributeAsNullIfNotSet() {
     driver.get(pages.formPage);
@@ -129,27 +126,18 @@ public class ElementAttributeTest extends JUnit4TestBase {
     assertThat(disabledSubmitElement.isEnabled(), is(false));
   }
 
-  @Ignore(value = {MARIONETTE},
-          reason = "sendKeys does not determine whether the element is disabled")
   @Test
+  @NotYetImplemented(SAFARI)
   public void testShouldThrowExceptionIfSendingKeysToElementDisabledUsingRandomDisabledStrings() {
     driver.get(pages.formPage);
     WebElement disabledTextElement1 = driver.findElement(By.id("disabledTextElement1"));
-    try {
-      disabledTextElement1.sendKeys("foo");
-      fail("Should have thrown exception");
-    } catch (InvalidElementStateException e) {
-      // Expected
-    }
+    Throwable t = catchThrowable(() -> disabledTextElement1.sendKeys("foo"));
+    assertThat(t, instanceOf(InvalidElementStateException.class));
     assertThat(disabledTextElement1.getText(), is(""));
 
     WebElement disabledTextElement2 = driver.findElement(By.id("disabledTextElement2"));
-    try {
-      disabledTextElement2.sendKeys("bar");
-      fail("Should have thrown exception");
-    } catch (InvalidElementStateException e) {
-      // Expected
-    }
+    Throwable t2 = catchThrowable(() -> disabledTextElement2.sendKeys("bar"));
+    assertThat(t2, instanceOf(InvalidElementStateException.class));
     assertThat(disabledTextElement2.getText(), is(""));
   }
 
@@ -288,8 +276,7 @@ public class ElementAttributeTest extends JUnit4TestBase {
     try {
       Thread.sleep(1000);
     } catch (InterruptedException e) {
-      e.printStackTrace(); // To change body of catch statement use File | Settings | File
-      // Templates.
+      e.printStackTrace();
     }
 
     WebElement th1 = driver.findElement(By.id("th1"));
@@ -304,6 +291,7 @@ public class ElementAttributeTest extends JUnit4TestBase {
 
   // This is a test-case re-creating issue 900.
   @Test
+  @NotYetImplemented(SAFARI)
   public void testShouldReturnValueOfOnClickAttribute() {
     driver.get(pages.javascriptPage);
 
@@ -321,7 +309,6 @@ public class ElementAttributeTest extends JUnit4TestBase {
   }
 
   @Test
-  @NotYetImplemented(HTMLUNIT)
   public void testGetAttributeDoesNotReturnAnObjectForSvgProperties() {
     assumeFalse("IE before 9 doesn't support SVG", TestUtilities.isOldIe(driver));
 
@@ -331,7 +318,6 @@ public class ElementAttributeTest extends JUnit4TestBase {
   }
 
   @Test
-  @Ignore(value = HTMLUNIT, reason = "Possible bug in getAttribute?")
   public void testCanRetrieveTheCurrentValueOfATextFormField_textInput() {
     driver.get(pages.formPage);
     WebElement element = driver.findElement(By.id("working"));
@@ -341,7 +327,6 @@ public class ElementAttributeTest extends JUnit4TestBase {
   }
 
   @Test
-  @Ignore(value = HTMLUNIT, reason = "Possible bug in getAttribute?")
   public void testCanRetrieveTheCurrentValueOfATextFormField_emailInput() {
     driver.get(pages.formPage);
     WebElement element = driver.findElement(By.id("email"));
@@ -351,7 +336,6 @@ public class ElementAttributeTest extends JUnit4TestBase {
   }
 
   @Test
-  @Ignore(value = HTMLUNIT, reason = "Possible bug in getAttribute?")
   public void testCanRetrieveTheCurrentValueOfATextFormField_textArea() {
     driver.get(pages.formPage);
     WebElement element = driver.findElement(By.id("emptyTextArea"));
@@ -360,7 +344,6 @@ public class ElementAttributeTest extends JUnit4TestBase {
     shortWait.until(ExpectedConditions.attributeToBe(element, "value", "hello world"));
   }
 
-  @Ignore({MARIONETTE})
   @Test
   public void testShouldReturnNullForNonPresentBooleanAttributes() {
     driver.get(pages.booleanAttributes);
@@ -371,6 +354,7 @@ public class ElementAttributeTest extends JUnit4TestBase {
   }
 
   @Test
+  @NotYetImplemented(SAFARI)
   public void testShouldReturnTrueForPresentBooleanAttributes() {
     driver.get(pages.booleanAttributes);
     WebElement element1 = driver.findElement(By.id("emailRequired"));
@@ -385,7 +369,6 @@ public class ElementAttributeTest extends JUnit4TestBase {
     assertEquals("true", element5.getAttribute("nowrap"));
   }
 
-  @Ignore({MARIONETTE})
   @Test
   public void testMultipleAttributeShouldBeNullWhenNotSet() {
     driver.get(pages.selectPage);
@@ -421,9 +404,7 @@ public class ElementAttributeTest extends JUnit4TestBase {
     assertEquals("true", element.getAttribute("multiple"));
   }
 
-  @JavascriptEnabled
   @Test
-  @Ignore(MARIONETTE)
   public void testGetAttributeOfUserDefinedProperty() {
     driver.get(pages.userDefinedProperty);
     WebElement element = driver.findElement(By.id("d"));

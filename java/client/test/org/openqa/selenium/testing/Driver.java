@@ -25,7 +25,8 @@ public enum Driver {
   FIREFOX,
   IE,
   MARIONETTE,
-  PHANTOMJS,
-  REMOTE,
   SAFARI,
+
+  REMOTE,
+  GRID
 }

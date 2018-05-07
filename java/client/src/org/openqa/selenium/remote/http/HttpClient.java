@@ -17,6 +17,11 @@
 
 package org.openqa.selenium.remote.http;
 
+import org.openqa.selenium.Platform;
+import org.openqa.selenium.internal.BuildInfo;
+import org.openqa.selenium.remote.internal.ApacheHttpClient;
+import org.openqa.selenium.remote.internal.OkHttpClient;
+
 import java.io.IOException;
 import java.net.URL;
 
@@ -25,24 +30,44 @@ import java.net.URL;
  */
 public interface HttpClient {
 
+  String USER_AGENT = String.format(
+      "selenium/%s (java %s)",
+      new BuildInfo().getReleaseLabel(),
+      (Platform.getCurrent().family() == null ?
+          Platform.getCurrent().toString().toLowerCase() :
+          Platform.getCurrent().family().toString().toLowerCase()));
+
   /**
-   * Executes the given request.
+   * Executes the given request, following any redirects if necessary.
    *
    * @param request the request to execute.
-   * @param followRedirects whether to automatically follow redirects.
    * @return the final response.
    * @throws IOException if an I/O error occurs.
    */
-  HttpResponse execute(HttpRequest request, boolean followRedirects) throws IOException;
-  
+  HttpResponse execute(HttpRequest request) throws IOException;
+
   /**
-	* Closes the connections associated with this client. 
-	*
-	* @throws  IOException  if an I/O error occurs.
-	*/
+	 * Closes the connections associated with this client.
+	 *
+	 * @throws  IOException  if an I/O error occurs.
+   * @deprecated This responsibility moved to Factory
+	 */
+  @Deprecated
   void close() throws IOException;
 
   interface Factory {
+
+    static Factory createDefault() {
+      String defaultFactory = System.getProperty("webdriver.http.factory", "okhttp");
+      switch (defaultFactory) {
+        case "apache":
+          return new ApacheHttpClient.Factory();
+
+        case "okhttp":
+        default:
+          return new OkHttpClient.Factory();
+      }
+    }
 
     /**
      * Creates a HTTP client that will send requests to the given URL.
@@ -51,5 +76,10 @@ public interface HttpClient {
      * @return HttpClient
      */
     HttpClient createClient(URL url);
+
+    /**
+     * Closes idle clients.
+     */
+    void cleanupIdleClients();
   }
 }

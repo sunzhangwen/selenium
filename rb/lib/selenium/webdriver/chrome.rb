@@ -1,5 +1,3 @@
-# encoding: utf-8
-#
 # Licensed to the Software Freedom Conservancy (SFC) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -19,31 +17,21 @@
 
 require 'net/http'
 
-require 'selenium/webdriver/chrome/service'
 require 'selenium/webdriver/chrome/bridge'
+require 'selenium/webdriver/chrome/service'
+require 'selenium/webdriver/chrome/driver'
 require 'selenium/webdriver/chrome/profile'
+require 'selenium/webdriver/chrome/options'
 
 module Selenium
   module WebDriver
     module Chrome
       def self.driver_path=(path)
-        warn <<-DEPRECATE.gsub(/\n +| {2,}/, ' ').freeze
-          [DEPRECATION] `driver_path=` is deprecated. Pass the driver path as an option instead.
-          e.g. Selenium::WebDriver.for :chrome, driver_path: '/path'
-        DEPRECATE
-
         Platform.assert_executable path
         @driver_path = path
       end
 
-      def self.driver_path(warning = true)
-        if warning
-          warn <<-DEPRECATE.gsub(/\n +| {2,}/, ' ').freeze
-            [DEPRECATION] `driver_path` is deprecated. Pass the driver path as an option instead.
-            e.g. Selenium::WebDriver.for :chrome, driver_path: '/path'
-          DEPRECATE
-        end
-
+      def self.driver_path
         @driver_path ||= nil
       end
 

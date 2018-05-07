@@ -17,31 +17,42 @@
 
 package org.openqa.grid.web;
 
-import com.google.common.collect.Maps;
-
-import org.openqa.grid.internal.Registry;
+import org.openqa.grid.common.exception.GridConfigurationException;
+import org.openqa.grid.internal.GridRegistry;
 import org.openqa.grid.internal.utils.configuration.GridHubConfiguration;
+import org.openqa.grid.shared.Stoppable;
 import org.openqa.grid.web.servlet.DisplayHelpServlet;
 import org.openqa.grid.web.servlet.DriverServlet;
 import org.openqa.grid.web.servlet.Grid1HeartbeatServlet;
 import org.openqa.grid.web.servlet.HubStatusServlet;
+import org.openqa.grid.web.servlet.HubW3CStatusServlet;
 import org.openqa.grid.web.servlet.LifecycleServlet;
 import org.openqa.grid.web.servlet.ProxyStatusServlet;
 import org.openqa.grid.web.servlet.RegistrationServlet;
 import org.openqa.grid.web.servlet.ResourceServlet;
 import org.openqa.grid.web.servlet.TestSessionStatusServlet;
-import org.openqa.grid.web.servlet.beta.ConsoleServlet;
+import org.openqa.grid.web.servlet.console.ConsoleServlet;
 import org.openqa.grid.web.utils.ExtraServletUtil;
+import org.openqa.selenium.json.Json;
 import org.openqa.selenium.net.NetworkUtils;
+import org.openqa.selenium.remote.server.jmx.JMXHelper;
+import org.openqa.selenium.remote.server.jmx.ManagedAttribute;
+import org.openqa.selenium.remote.server.jmx.ManagedService;
+import org.seleniumhq.jetty9.security.ConstraintMapping;
+import org.seleniumhq.jetty9.security.ConstraintSecurityHandler;
 import org.seleniumhq.jetty9.server.HttpConfiguration;
 import org.seleniumhq.jetty9.server.HttpConnectionFactory;
 import org.seleniumhq.jetty9.server.Server;
 import org.seleniumhq.jetty9.server.ServerConnector;
 import org.seleniumhq.jetty9.servlet.ServletContextHandler;
+import org.seleniumhq.jetty9.servlet.ServletHolder;
+import org.seleniumhq.jetty9.util.security.Constraint;
 import org.seleniumhq.jetty9.util.thread.QueuedThreadPool;
 
+import java.net.BindException;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.logging.Logger;
 
@@ -51,13 +62,14 @@ import javax.servlet.Servlet;
  * Jetty server. Main entry point for everything about the grid. <p> Except for unit tests, this
  * should be a singleton.
  */
-public class Hub {
+@ManagedService(objectName = "org.seleniumhq.grid:type=Hub", description = "Selenium Grid Hub")
+public class Hub implements Stoppable {
 
   private static final Logger log = Logger.getLogger(Hub.class.getName());
 
-  private GridHubConfiguration config;
-  private final Registry registry;
-  private final Map<String, Class<? extends Servlet>> extraServlet = Maps.newHashMap();
+  private final GridHubConfiguration config;
+  private final GridRegistry registry;
+  private final Map<String, Class<? extends Servlet>> extraServlet = new HashMap<>();
 
   private Server server;
 
@@ -70,17 +82,23 @@ public class Hub {
    *
    * @return The registry
    */
-  public Registry getRegistry() {
+  public GridRegistry getRegistry() {
     return registry;
   }
 
   public Hub(GridHubConfiguration gridHubConfiguration) {
-    registry = Registry.newInstance(this, gridHubConfiguration);
+    config = gridHubConfiguration == null ? new GridHubConfiguration() : gridHubConfiguration;
 
-    config = gridHubConfiguration;
+    try {
+      registry = (GridRegistry) Class.forName(config.registry).newInstance();
+      registry.setHub(this);
+    } catch (Throwable e) {
+      throw new GridConfigurationException("Error creating class with " + config.registry +
+                                           " : " + e.getMessage(), e);
+    }
+
     if (config.host == null) {
-      NetworkUtils utils = new NetworkUtils();
-      config.host = utils.getIp4NonLoopbackAddressOfThisMachine().getHostAddress();
+      updateHostToNonLoopBackAddressOfThisMachine();
     }
 
     if (config.port == null) {
@@ -97,6 +115,11 @@ public class Hub {
         }
       }
     }
+
+    // start the registry, now that 'config' is all setup
+    registry.start();
+
+    new JMXHelper().register(this);
   }
 
   private void addDefaultServlets(ServletContextHandler handler) {
@@ -109,6 +132,10 @@ public class Hub {
     handler.addServlet(ProxyStatusServlet.class.getName(), "/grid/api/proxy/*");
 
     handler.addServlet(HubStatusServlet.class.getName(), "/grid/api/hub/*");
+
+    ServletHolder statusHolder = new ServletHolder(new HubW3CStatusServlet(getRegistry()));
+    handler.addServlet(statusHolder, "/status");
+    handler.addServlet(statusHolder, "/wd/hub/status");
 
     handler.addServlet(TestSessionStatusServlet.class.getName(), "/grid/api/testsession/*");
 
@@ -150,18 +177,42 @@ public class Hub {
       httpConfig.setSecureScheme("https");
       httpConfig.setSecurePort(config.port);
 
-      log.info("Will listen on " + config.port);
-
       ServerConnector http = new ServerConnector(server, new HttpConnectionFactory(httpConfig));
+      http.setHost(config.host);
+      if (config.host.equals("0.0.0.0")) {
+        // though we bind to all IPv4 interfaces, we need to advertise that connections
+        // should come in on a public (non-loopback) interface
+        updateHostToNonLoopBackAddressOfThisMachine();
+      }
       http.setPort(config.port);
 
       server.addConnector(http);
 
-      ServletContextHandler root = new ServletContextHandler(ServletContextHandler.SESSIONS);
+      ServletContextHandler root = new ServletContextHandler(ServletContextHandler.SESSIONS + ServletContextHandler.SECURITY);
       root.setContextPath("/");
+
+      ConstraintSecurityHandler securityHandler = (ConstraintSecurityHandler) root.getSecurityHandler();
+
+      Constraint disableTrace = new Constraint();
+      disableTrace.setName("Disable TRACE");
+      disableTrace.setAuthenticate(true);
+      ConstraintMapping disableTraceMapping = new ConstraintMapping();
+      disableTraceMapping.setConstraint(disableTrace);
+      disableTraceMapping.setMethod("TRACE");
+      disableTraceMapping.setPathSpec("/");
+      securityHandler.addConstraintMapping(disableTraceMapping);
+
+      Constraint enableOther = new Constraint();
+      enableOther.setName("Enable everything but TRACE");
+      ConstraintMapping enableOtherMapping = new ConstraintMapping();
+      enableOtherMapping.setConstraint(enableOther);
+      enableOtherMapping.setMethodOmissions(new String[] {"TRACE"});
+      enableOtherMapping.setPathSpec("/");
+      securityHandler.addConstraintMapping(enableOtherMapping);
+
       server.setHandler(root);
 
-      root.setAttribute(Registry.KEY, registry);
+      root.setAttribute(GridRegistry.KEY, registry);
 
       addDefaultServlets(root);
 
@@ -179,15 +230,45 @@ public class Hub {
     return config;
   }
 
+  @ManagedAttribute(name = "Configuration")
+  public Map<?,?> getConfigurationForJMX() {
+    Json json = new Json();
+    return json.toType(json.toJson(config.toJson()), Map.class);
+  }
+
   public void start() throws Exception {
     initServer();
-    server.start();
+
+    try {
+      server.start();
+    } catch (Exception e) {
+      try {
+        stop();
+      } catch (Exception ignore) {
+      }
+      if (e instanceof BindException) {
+        log.severe(String.format(
+            "Port %s is busy, please choose a free port for the hub and specify it using -port option", config.port));
+        return;
+      } else {
+        throw new RuntimeException(e);
+      }
+    }
+
+    log.info("Selenium Grid hub is up and running");
+    log.info(String.format("Nodes should register to %s", getRegistrationURL()));
+    log.info(String.format("Clients should connect to %s", getWebDriverHubRequestURL()));
   }
 
-  public void stop() throws Exception {
-    server.stop();
+  public void stop() {
+    registry.stop();
+    try {
+      server.stop();
+    } catch (Exception ignore) {
+    }
   }
 
+  @ManagedAttribute(name= "URL")
   public URL getUrl() {
     return getUrl("");
   }
@@ -213,6 +294,16 @@ public class Hub {
 
   public URL getConsoleURL() {
     return getUrl("/grid/console");
+  }
+
+  @ManagedAttribute(name = "NewSessionRequestCount")
+  public int getNewSessionRequestCount() {
+    return getRegistry().getNewSessionRequestCount();
+  }
+
+  private void updateHostToNonLoopBackAddressOfThisMachine() {
+    NetworkUtils utils = new NetworkUtils();
+    config.host = utils.getIp4NonLoopbackAddressOfThisMachine().getHostAddress();
   }
 
 }

@@ -26,12 +26,12 @@ import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
 
 import org.junit.Test;
 import org.openqa.selenium.By;
 import org.openqa.selenium.Capabilities;
 import org.openqa.selenium.HasCapabilities;
+import org.openqa.selenium.ImmutableCapabilities;
 import org.openqa.selenium.NoSuchElementException;
 import org.openqa.selenium.Rotatable;
 import org.openqa.selenium.ScreenOrientation;
@@ -39,7 +39,7 @@ import org.openqa.selenium.TakesScreenshot;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 
-import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,8 +57,7 @@ public abstract class BaseAugmenterTest {
 
   @Test
   public void shouldAddInterfaceFromCapabilityIfNecessary() {
-    DesiredCapabilities caps = new DesiredCapabilities();
-    caps.setCapability("magic.numbers", true);
+    final Capabilities caps = new ImmutableCapabilities("magic.numbers", true);
     WebDriver driver = new RemoteWebDriver(new StubExecutor(caps), caps);
 
     BaseAugmenter augmenter = getAugmenter();
@@ -71,8 +70,7 @@ public abstract class BaseAugmenterTest {
 
   @Test
   public void shouldNotAddInterfaceWhenBooleanValueForItIsFalse() {
-    DesiredCapabilities caps = new DesiredCapabilities();
-    caps.setCapability("magic.numbers", false);
+    Capabilities caps = new ImmutableCapabilities("magic.numbers", false);
     WebDriver driver = new RemoteWebDriver(new StubExecutor(caps), caps);
 
     BaseAugmenter augmenter = getAugmenter();
@@ -85,8 +83,7 @@ public abstract class BaseAugmenterTest {
 
   @Test
   public void shouldDelegateToHandlerIfAdded() {
-    DesiredCapabilities caps = new DesiredCapabilities();
-    caps.setCapability("foo", true);
+    Capabilities caps = new ImmutableCapabilities("foo", true);
 
     BaseAugmenter augmenter = getAugmenter();
     augmenter.addDriverAugmentation("foo", new AugmenterProvider() {
@@ -95,12 +92,7 @@ public abstract class BaseAugmenterTest {
       }
 
       public InterfaceImplementation getImplementation(Object value) {
-        return new InterfaceImplementation() {
-          public Object invoke(ExecuteMethod executeMethod, Object self, Method method,
-              Object... args) {
-            return "Hello World";
-          }
-        };
+        return (executeMethod, self, method, args) -> "Hello World";
       }
     });
 
@@ -113,10 +105,9 @@ public abstract class BaseAugmenterTest {
 
   @Test
   public void shouldDelegateUnmatchedMethodCallsToDriverImplementation() {
-    DesiredCapabilities caps = new DesiredCapabilities();
-    caps.setCapability("magic.numbers", true);
+    Capabilities caps = new ImmutableCapabilities("magic.numbers", true);
     StubExecutor stubExecutor = new StubExecutor(caps);
-    stubExecutor.expect(DriverCommand.GET_TITLE, new HashMap<String, Object>(), "Title");
+    stubExecutor.expect(DriverCommand.GET_TITLE, new HashMap<>(), "Title");
     WebDriver driver = new RemoteWebDriver(stubExecutor, caps);
 
     BaseAugmenter augmenter = getAugmenter();
@@ -128,9 +119,8 @@ public abstract class BaseAugmenterTest {
 
   @Test(expected = NoSuchElementException.class)
   public void proxyShouldNotAppearInStackTraces() {
-    final DesiredCapabilities caps = new DesiredCapabilities();
     // This will force the class to be enhanced
-    caps.setCapability("magic.numbers", true);
+    final Capabilities caps = new ImmutableCapabilities("magic.numbers", true);
 
     DetonatingDriver driver = new DetonatingDriver();
     driver.setCapabilities(caps);
@@ -165,17 +155,11 @@ public abstract class BaseAugmenterTest {
       }
 
       public InterfaceImplementation getImplementation(Object value) {
-        return new InterfaceImplementation() {
-          public Object invoke(ExecuteMethod executeMethod, Object self, Method method,
-              Object... args) {
-            return "Hello World";
-          }
-        };
+        return (executeMethod, self, method, args) -> "Hello World";
       }
     });
 
-    final DesiredCapabilities caps = new DesiredCapabilities();
-    caps.setCapability("foo", true);
+    final Capabilities caps = new ImmutableCapabilities("foo", true);
 
     StubExecutor executor = new StubExecutor(caps);
     RemoteWebDriver parent = new RemoteWebDriver(executor, caps) {
@@ -217,9 +201,7 @@ public abstract class BaseAugmenterTest {
 
   @Test
   public void shouldBeAbleToAugmentMultipleTimes() {
-    DesiredCapabilities caps = new DesiredCapabilities();
-    caps.setCapability("canRotate", true);
-    caps.setCapability("magic.numbers", true);
+    Capabilities caps = new ImmutableCapabilities("canRotate", true, "magic.numbers", true);
 
     StubExecutor stubExecutor = new StubExecutor(caps);
     stubExecutor.expect(DriverCommand.GET_SCREEN_ORIENTATION,
@@ -251,7 +233,7 @@ public abstract class BaseAugmenterTest {
 
   protected static class StubExecutor implements CommandExecutor {
     private final Capabilities capabilities;
-    private final List<Data> expected = Lists.newArrayList();
+    private final List<Data> expected = new ArrayList<>();
 
     protected StubExecutor(Capabilities capabilities) {
       this.capabilities = capabilities;
@@ -345,7 +327,7 @@ public abstract class BaseAugmenterTest {
 
     @Override
     public Capabilities getCapabilities() {
-      return new DesiredCapabilities();
+      return new ImmutableCapabilities();
     }
   }
 
@@ -359,13 +341,7 @@ public abstract class BaseAugmenterTest {
 
     @Override
     public InterfaceImplementation getImplementation(Object value) {
-      return new InterfaceImplementation() {
-        @Override
-        public Object invoke(ExecuteMethod executeMethod, Object self, Method method,
-                             Object... args) {
-          return null;
-        }
-      };
+      return (executeMethod, self, method, args) -> null;
     }
   }
 }

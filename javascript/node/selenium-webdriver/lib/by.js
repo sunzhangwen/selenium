@@ -182,7 +182,7 @@ class By {
    *
    * @param {!(string|Function)} script The script to execute.
    * @param {...*} var_args The arguments to pass to the script.
-   * @return {function(!./webdriver.WebDriver): !./promise.Promise}
+   * @return {function(!./webdriver.WebDriver): !Promise}
    *     A new JavaScript-based locator function.
    */
   static js(script, var_args) {
@@ -259,6 +259,14 @@ function check(locator) {
   if (locator instanceof By || typeof locator === 'function') {
     return locator;
   }
+
+  if (locator
+      && typeof locator === 'object'
+      && typeof locator.using === 'string'
+      && typeof locator.value === 'string') {
+    return new By(locator.using, locator.value);
+  }
+
   for (let key in locator) {
     if (locator.hasOwnProperty(key) && By.hasOwnProperty(key)) {
       return By[key](locator[key]);

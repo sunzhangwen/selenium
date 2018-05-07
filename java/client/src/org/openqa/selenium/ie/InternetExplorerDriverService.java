@@ -17,6 +17,7 @@
 
 package org.openqa.selenium.ie;
 
+import com.google.auto.service.AutoService;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
@@ -90,12 +91,13 @@ public class InternetExplorerDriverService extends DriverService {
    * @return A new InternetExplorerDriverService using the default configuration.
    */
   public static InternetExplorerDriverService createDefaultService() {
-    return new Builder().usingAnyFreePort().build();
+    return new Builder().build();
   }
 
   /**
    * Builder used to configure new {@link InternetExplorerDriverService} instances.
    */
+  @AutoService(DriverService.Builder.class)
   public static class Builder extends DriverService.Builder<
       InternetExplorerDriverService, InternetExplorerDriverService.Builder> {
 
@@ -154,7 +156,7 @@ public class InternetExplorerDriverService extends DriverService {
     /**
      * Configures silence in stdout of the driver server by unlogged messages.
      *
-     * @param silent To be silent in stdout ir not.
+     * @param silent To be silent in stdout or not.
      * @return A self reference.
      */
     public Builder withSilent(Boolean silent) {

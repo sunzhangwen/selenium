@@ -17,11 +17,14 @@
 
 import base64
 import os
+import platform
+import warnings
 
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 
 
 class Options(object):
+    KEY = "goog:chromeOptions"
 
     def __init__(self):
         self._binary_location = ''
@@ -109,7 +112,7 @@ class Options(object):
         to the ChromeDriver
 
         :Args:
-         - extension: path to the *.crx file
+         - extension: path to the \*.crx file
         """
         if extension:
             extension_to_add = os.path.abspath(os.path.expanduser(extension))
@@ -150,13 +153,42 @@ class Options(object):
         """
         self._experimental_options[name] = value
 
+    @property
+    def headless(self):
+        """
+        Returns whether or not the headless argument is set
+        """
+        return '--headless' in self._arguments
+
+    @headless.setter
+    def headless(self, value):
+        """
+        Sets the headless argument
+
+        Args:
+          value: boolean value indicating to set the headless option
+        """
+        args = {'--headless'}
+        if platform.system().lower() == 'windows':
+            args.add('--disable-gpu')
+        if value is True:
+            self._arguments.extend(args)
+        else:
+            self._arguments = list(set(self._arguments) - args)
+
+    def set_headless(self, headless=True):
+        """ Deprecated, options.headless = True """
+        warnings.warn('use setter for headless property instead of set_headless',
+                      DeprecationWarning)
+        self.headless = headless
+
     def to_capabilities(self):
         """
             Creates a capabilities with all the options that have been set and
 
             returns a dictionary with everything
         """
-        chrome = DesiredCapabilities.CHROME.copy()
+        caps = DesiredCapabilities.CHROME.copy()
 
         chrome_options = self.experimental_options.copy()
         chrome_options["extensions"] = self.extensions
@@ -166,6 +198,6 @@ class Options(object):
         if self.debugger_address:
             chrome_options["debuggerAddress"] = self.debugger_address
 
-        chrome["chromeOptions"] = chrome_options
+        caps[self.KEY] = chrome_options
 
-        return chrome
+        return caps

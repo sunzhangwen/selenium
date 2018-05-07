@@ -19,12 +19,13 @@ package org.openqa.selenium;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.openqa.selenium.testing.Driver.SAFARI;
 
 import org.junit.Test;
 import org.openqa.selenium.internal.WrapsElement;
 import org.openqa.selenium.remote.RemoteWebElement;
 import org.openqa.selenium.testing.JUnit4TestBase;
-import org.openqa.selenium.testing.JavascriptEnabled;
+import org.openqa.selenium.testing.NotYetImplemented;
 import org.openqa.selenium.testing.SwitchToTopAfterTest;
 
 import java.util.List;
@@ -68,9 +69,9 @@ public class ElementEqualityTest extends JUnit4TestBase {
     assertEquals(body.get(0).hashCode(), xbody.get(0).hashCode());
   }
 
-  @JavascriptEnabled
   @SwitchToTopAfterTest
   @Test
+  @NotYetImplemented(SAFARI)
   public void testAnElementFoundInADifferentFrameViaJsShouldHaveSameId() {
     driver.get(pages.missedJsReferencePage);
 

@@ -17,21 +17,24 @@
 
 package org.openqa.grid.web.servlet;
 
+import com.google.common.base.Throwables;
 import com.google.common.io.ByteStreams;
-import com.google.gson.Gson;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
 
 import org.openqa.grid.internal.ExternalSessionKey;
-import org.openqa.grid.internal.Registry;
+import org.openqa.grid.internal.GridRegistry;
 import org.openqa.grid.web.servlet.handler.RequestHandler;
 import org.openqa.grid.web.servlet.handler.SeleniumBasedRequest;
 import org.openqa.grid.web.servlet.handler.WebDriverRequest;
+import org.openqa.selenium.json.Json;
 import org.openqa.selenium.remote.ErrorCodes;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
@@ -51,7 +54,7 @@ public class DriverServlet extends RegistryBasedServlet {
     this(null);
   }
 
-  public DriverServlet(Registry registry) {
+  public DriverServlet(GridRegistry registry) {
     super(registry);
   }
 
@@ -84,42 +87,50 @@ public class DriverServlet extends RegistryBasedServlet {
 
     } catch (Throwable e) {
       if (r instanceof WebDriverRequest && !response.isCommitted()) {
-        // https://github.com/SeleniumHQ/selenium/wiki/JsonWireProtocol#error-handling
+        // Format the exception for both the JSON wire protocol and the W3C spec compliant version.
+
         response.reset();
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
         response.setStatus(500);
 
-        JsonObject resp = new JsonObject();
+        Map<String, Object> resp = new TreeMap<>();
 
+        // https://github.com/SeleniumHQ/selenium/wiki/JsonWireProtocol#error-handling
         final ExternalSessionKey serverSession = req.getServerSession();
-        resp.addProperty("sessionId", serverSession != null ? serverSession.getKey() : null);
-        resp.addProperty("status", ErrorCodes.UNHANDLED_ERROR);
-        JsonObject value = new JsonObject();
-        value.addProperty("message", e.getMessage());
-        value.addProperty("class", e.getClass().getCanonicalName());
+        resp.put("sessionId", serverSession != null ? serverSession.getKey() : null);
+        resp.put("status", ErrorCodes.UNHANDLED_ERROR);
+        Map<String, Object> value = new TreeMap<>();
+        value.put("message", e.getMessage());
+        value.put("class", e.getClass().getCanonicalName());
 
-        JsonArray stacktrace = new JsonArray();
+        List<Object> stacktrace = new LinkedList<>();
         for (StackTraceElement ste : e.getStackTrace()) {
-          JsonObject st = new JsonObject();
-          st.addProperty("fileName", ste.getFileName());
-          st.addProperty("className", ste.getClassName());
-          st.addProperty("methodName", ste.getMethodName());
-          st.addProperty("lineNumber", ste.getLineNumber());
+          Map<String, Object> st = new TreeMap<>();
+          st.put("fileName", ste.getFileName());
+          st.put("className", ste.getClassName());
+          st.put("methodName", ste.getMethodName());
+          st.put("lineNumber", ste.getLineNumber());
           stacktrace.add(st);
         }
-        value.add("stackTrace", stacktrace);
-        resp.add("value", value);
+        value.put("stackTrace", stacktrace);
 
-        String json = new Gson().toJson(resp);
+        // https://w3c.github.io/webdriver/webdriver-spec.html#dfn-send-an-error
+        value.put("error", "unknown error");
+        // Already done above, but kept here for when we retire the original protocol
+        value.put("message", e.getMessage());
+        // Let's hope nothing ever looks at these strings case insensitively.
+        value.put("stacktrace", Throwables.getStackTraceAsString(e));
+
+        resp.put("value", value);
+
+        String json = new Json().toJson(resp);
 
         byte[] bytes = json.getBytes("UTF-8");
-        InputStream in = new ByteArrayInputStream(bytes);
-        try {
-            response.setHeader("Content-Length", Integer.toString(bytes.length));
-            ByteStreams.copy(in, response.getOutputStream());
+        try (InputStream in = new ByteArrayInputStream(bytes)) {
+          response.setHeader("Content-Length", Integer.toString(bytes.length));
+          ByteStreams.copy(in, response.getOutputStream());
         } finally {
-          in.close();
           response.flushBuffer();
         }
       } else {

@@ -15,14 +15,12 @@
 // specific language governing permissions and limitations
 // under the License.
 
-
 package com.thoughtworks.selenium;
 
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 import static org.openqa.selenium.UnexpectedAlertBehaviour.IGNORE;
 import static org.openqa.selenium.remote.CapabilityType.UNEXPECTED_ALERT_BEHAVIOUR;
 
-import com.google.common.base.Charsets;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.io.Resources;
@@ -42,7 +40,9 @@ import org.junit.rules.TestWatcher;
 import org.junit.runner.Description;
 import org.junit.runners.model.Statement;
 import org.openqa.selenium.BuckBuild;
+import org.openqa.selenium.Capabilities;
 import org.openqa.selenium.JavascriptExecutor;
+import org.openqa.selenium.MutableCapabilities;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.environment.GlobalTestEnvironment;
 import org.openqa.selenium.internal.WrapsDriver;
@@ -54,6 +54,7 @@ import org.openqa.selenium.testing.drivers.WebDriverBuilder;
 
 import java.io.IOException;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -141,12 +142,12 @@ public class InternalSelenseTestBase extends SeleneseTestBase {
         return;
       }
 
-      DesiredCapabilities caps = createCapabilities();
+      MutableCapabilities caps = new MutableCapabilities(createCapabilities());
       caps.setCapability(UNEXPECTED_ALERT_BEHAVIOUR, IGNORE);
 
       String baseUrl = whereIs("selenium-server/");
 
-      WebDriver driver = new WebDriverBuilder().setDesiredCapabilities(caps).get();
+      WebDriver driver = new WebDriverBuilder().get(caps);
       selenium = new WebDriverBackedSelenium(driver, baseUrl);
 
       selenium.setBrowserLogLevel("debug");
@@ -154,7 +155,7 @@ public class InternalSelenseTestBase extends SeleneseTestBase {
     }
   };
 
-  private DesiredCapabilities createCapabilities() {
+  private Capabilities createCapabilities() {
     String property = System.getProperty("selenium.browser", "ff");
 
     Browser browser = Browser.valueOf(property);
@@ -199,7 +200,7 @@ public class InternalSelenseTestBase extends SeleneseTestBase {
       try {
         URL scriptUrl =
             Resources.getResource(getClass(), "/com/thoughtworks/selenium/testHelpers.js");
-        String script = Resources.toString(scriptUrl, Charsets.UTF_8);
+        String script = Resources.toString(scriptUrl, StandardCharsets.UTF_8);
 
         ((JavascriptExecutor) driver).executeScript(script);
       } catch (IOException e) {

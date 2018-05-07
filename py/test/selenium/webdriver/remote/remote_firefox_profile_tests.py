@@ -17,22 +17,14 @@
 
 import pytest
 from selenium import webdriver
-from test.selenium.common import utils
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
-
-
-@pytest.fixture(autouse=True)
-def server(request):
-    utils.start_server(request)
-
-    def fin():
-        utils.stop_server(request)
-    request.addfinalizer(fin)
 
 
 @pytest.fixture
 def capabilities():
-    return DesiredCapabilities.FIREFOX.copy()
+    capabilities = DesiredCapabilities.FIREFOX.copy()
+    capabilities['marionette'] = False
+    return capabilities
 
 
 @pytest.fixture
@@ -53,4 +45,4 @@ def profile():
 
 
 def test_profile_is_used(driver):
-    assert 'about:' == driver.current_url
+    assert 'about:blank' == driver.current_url or 'about:' == driver.current_url

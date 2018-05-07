@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+import warnings
 
 from selenium.webdriver.remote.webdriver import WebDriver as RemoteWebDriver
 from .remote_connection import ChromeRemoteConnection
@@ -30,8 +31,9 @@ class WebDriver(RemoteWebDriver):
     """
 
     def __init__(self, executable_path="chromedriver", port=0,
-                 chrome_options=None, service_args=None,
-                 desired_capabilities=None, service_log_path=None):
+                 options=None, service_args=None,
+                 desired_capabilities=None, service_log_path=None,
+                 chrome_options=None):
         """
         Creates a new instance of the chrome driver.
 
@@ -42,17 +44,21 @@ class WebDriver(RemoteWebDriver):
          - port - port you would like the service to run, if left as 0, a free port will be found.
          - desired_capabilities: Dictionary object with non-browser specific
            capabilities only, such as "proxy" or "loggingPref".
-         - chrome_options: this takes an instance of ChromeOptions
+         - options: this takes an instance of ChromeOptions
         """
-        if chrome_options is None:
+        if chrome_options:
+            warnings.warn('use options instead of chrome_options', DeprecationWarning)
+            options = chrome_options
+
+        if options is None:
             # desired_capabilities stays as passed in
             if desired_capabilities is None:
                 desired_capabilities = self.create_options().to_capabilities()
         else:
             if desired_capabilities is None:
-                desired_capabilities = chrome_options.to_capabilities()
+                desired_capabilities = options.to_capabilities()
             else:
-                desired_capabilities.update(chrome_options.to_capabilities())
+                desired_capabilities.update(options.to_capabilities())
 
         self.service = Service(
             executable_path,
@@ -75,6 +81,39 @@ class WebDriver(RemoteWebDriver):
     def launch_app(self, id):
         """Launches Chrome app specified by id."""
         return self.execute("launchApp", {'id': id})
+
+    def get_network_conditions(self):
+        """
+        Gets Chrome network emulation settings.
+
+        :Returns:
+            A dict. For example:
+
+            {'latency': 4, 'download_throughput': 2, 'upload_throughput': 2,
+            'offline': False}
+
+        """
+        return self.execute("getNetworkConditions")['value']
+
+    def set_network_conditions(self, **network_conditions):
+        """
+        Sets Chrome network emulation settings.
+
+        :Args:
+         - network_conditions: A dict with conditions specification.
+
+        :Usage:
+            driver.set_network_conditions(
+                offline=False,
+                latency=5,  # additional latency (ms)
+                download_throughput=500 * 1024,  # maximal throughput
+                upload_throughput=500 * 1024)  # maximal throughput
+
+            Note: 'throughput' can be used to set both (for download and upload).
+        """
+        self.execute("setNetworkConditions", {
+            'network_conditions': network_conditions
+        })
 
     def quit(self):
         """

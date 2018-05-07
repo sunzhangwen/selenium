@@ -1,5 +1,3 @@
-# encoding: utf-8
-#
 # Licensed to the Software Freedom Conservancy (SFC) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -27,29 +25,24 @@ module Selenium
         driver.find_element(id: 'imageButton').click
       end
 
-      compliant_on browser: [:chrome, :ff_esr] do
-        not_compliant_on driver: :remote, platform: :macosx do
-          it 'should raise if different element receives click' do
-            driver.navigate.to url_for('click_tests/overlapping_elements.html')
-            element_error = 'Other element would receive the click: <div id="over"><\/div>'
-            error = /is not clickable at point \(\d+, \d+\)\. #{element_error}/
-            expect { driver.find_element(id: 'contents').click }
-              .to raise_error(Selenium::WebDriver::Error::UnknownError, error)
-          end
-        end
+      it 'should raise if different element receives click', only: {browser: %i[chrome ff_esr]} do
+        driver.navigate.to url_for('click_tests/overlapping_elements.html')
+        element_error = 'Other element would receive the click: <div id="over"><\/div>'
+        error = /is not clickable at point \(\d+, \d+\)\. #{element_error}/
+        expect { driver.find_element(id: 'contents').click }
+          .to raise_error(Selenium::WebDriver::Error::UnknownError, error)
       end
 
-      compliant_on browser: [:firefox, :ff_esr, :ff_nightly] do
-        it 'should not raise if element is only partially covered' do
-          driver.navigate.to url_for('click_tests/overlapping_elements.html')
-          expect { driver.find_element(id: 'other_contents').click }.not_to raise_error
-        end
+      it 'should not raise if element is only partially covered', only: {browser: %i[ff_esr safari]} do
+        driver.navigate.to url_for('click_tests/overlapping_elements.html')
+        expect { driver.find_element(id: 'other_contents').click }.not_to raise_error
       end
 
       it 'should submit' do
         driver.navigate.to url_for('formPage.html')
         wait_for_element(id: 'submitButton')
         driver.find_element(id: 'submitButton').submit
+        reset_driver!
       end
 
       it 'should send string keys' do
@@ -58,32 +51,36 @@ module Selenium
         driver.find_element(id: 'working').send_keys('foo', 'bar')
       end
 
-      not_compliant_on browser: :safari do
-        it 'should send key presses' do
-          driver.navigate.to url_for('javascriptPage.html')
-          key_reporter = driver.find_element(id: 'keyReporter')
+      it 'should send key presses' do
+        driver.navigate.to url_for('javascriptPage.html')
+        key_reporter = driver.find_element(id: 'keyReporter')
 
-          key_reporter.send_keys('Tet', :arrow_left, 's')
-          expect(key_reporter.attribute('value')).to eq('Test')
-        end
+        key_reporter.send_keys('Tet', :arrow_left, 's')
+        expect(key_reporter.attribute('value')).to eq('Test')
       end
 
-      # PhantomJS on windows issue: https://github.com/ariya/phantomjs/issues/10993
-      not_compliant_on browser: [:safari, :edge, :phantomjs] do
-        it 'should handle file uploads' do
-          driver.navigate.to url_for('formPage.html')
+      # https://github.com/mozilla/geckodriver/issues/245
+      it 'should send key presses chords', except: {browser: %i[firefox safari safari_preview]} do
+        driver.navigate.to url_for('javascriptPage.html')
+        key_reporter = driver.find_element(id: 'keyReporter')
 
-          element = driver.find_element(id: 'upload')
-          expect(element.attribute('value')).to be_empty
+        key_reporter.send_keys([:shift, 'h'], 'ello')
+        expect(key_reporter.attribute('value')).to eq('Hello')
+      end
 
-          file = Tempfile.new('file-upload')
-          path = file.path
-          path.tr!('/', '\\') if WebDriver::Platform.windows?
+      it 'should handle file uploads', except: {browser: %i[safari edge safari_preview]} do
+        driver.navigate.to url_for('formPage.html')
 
-          element.send_keys path
+        element = driver.find_element(id: 'upload')
+        expect(element.attribute('value')).to be_empty
 
-          expect(element.attribute('value')).to include(File.basename(path))
-        end
+        file = Tempfile.new('file-upload')
+        path = file.path
+        path.tr!('/', '\\') if WebDriver::Platform.windows?
+
+        element.send_keys path
+
+        expect(element.attribute('value')).to include(File.basename(path))
       end
 
       it 'should get attribute value' do
@@ -96,11 +93,9 @@ module Selenium
         expect(driver.find_element(id: 'withText').attribute('nonexistent')).to be_nil
       end
 
-      not_compliant_on browser: :edge do
-        it 'should get property value' do
-          driver.navigate.to url_for('formPage.html')
-          expect(driver.find_element(id: 'withText').property('nodeName')).to eq('TEXTAREA')
-        end
+      it 'should get property value', except: {browser: :edge} do
+        driver.navigate.to url_for('formPage.html')
+        expect(driver.find_element(id: 'withText').property('nodeName')).to eq('TEXTAREA')
       end
 
       it 'should clear' do
@@ -135,11 +130,9 @@ module Selenium
         expect(driver.find_element(class: 'header').text).to eq('XHTML Might Be The Future')
       end
 
-      not_compliant_on browser: :safari do
-        it 'should get displayed' do
-          driver.navigate.to url_for('xhtmlTest.html')
-          expect(driver.find_element(class: 'header')).to be_displayed
-        end
+      it 'should get displayed' do
+        driver.navigate.to url_for('xhtmlTest.html')
+        expect(driver.find_element(class: 'header')).to be_displayed
       end
 
       context 'size and location' do
@@ -166,22 +159,30 @@ module Selenium
           expect(size.width).to be > 0
           expect(size.height).to be > 0
         end
+
+        it 'should get rect' do
+          driver.navigate.to url_for('xhtmlTest.html')
+          rect = driver.find_element(class: 'header').rect
+
+          expect(rect.x).to be > 0
+          expect(rect.y).to be > 0
+          expect(rect.width).to be > 0
+          expect(rect.height).to be > 0
+        end
       end
 
-      # Firefox - "Actions Endpoint Not Yet Implemented"
-      not_compliant_on browser: [:safari, :firefox, :ff_nightly] do
-        it 'should drag and drop' do
-          driver.navigate.to url_for('dragAndDropTest.html')
+      # IE - https://github.com/SeleniumHQ/selenium/pull/4043
+      it 'should drag and drop', except: {browser: %i[edge ie safari safari_preview]} do
+        driver.navigate.to url_for('dragAndDropTest.html')
 
-          img1 = driver.find_element(id: 'test1')
-          img2 = driver.find_element(id: 'test2')
+        img1 = driver.find_element(id: 'test1')
+        img2 = driver.find_element(id: 'test2')
 
-          driver.action.drag_and_drop_by(img1, 100, 100)
-                .drag_and_drop(img2, img1)
-                .perform
+        driver.action.drag_and_drop_by(img1, 100, 100)
+              .drag_and_drop(img2, img1)
+              .perform
 
-          expect(img1.location).to eq(img2.location)
-        end
+        expect(img1.location).to eq(img2.location)
       end
 
       it 'should get css property' do

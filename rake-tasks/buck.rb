@@ -1,4 +1,4 @@
-require 'childprocess'
+require 'open3'
 require 'rake-tasks/checks'
 
 module Buck
@@ -27,12 +27,18 @@ module Buck
       out_dir = File.dirname out
       FileUtils.mkdir_p(out_dir) unless File.exist?(out_dir)
 
-      require "third_party/java/httpcomponents/httpcore-4.4.4"
-      require "third_party/java/httpcomponents/httpclient-4.5.2"
+      require "third_party/java/httpcomponents/httpcore-4.4.6"
+      require "third_party/java/httpcomponents/httpclient-4.5.3"
       require "third_party/java/commons-logging/commons-logging-1.2"
-      require "third_party/java/commons-io/commons-io-2.5"
+      require "third_party/java/commons-io/commons-io-2.6"
 
-      httpclient = org.apache.http.impl.client.HttpClients.custom().setRedirectStrategy(org.apache.http.impl.client.LaxRedirectStrategy.new()).build()
+      puts "Downloading buck build tool, it can take up to several minutes..."
+
+      httpclient = org.apache.http.impl.client.HttpClients.custom()
+                       .setRedirectStrategy(org.apache.http.impl.client.LaxRedirectStrategy.new())
+                       .setDefaultRequestConfig(org.apache.http.client.config.RequestConfig.custom()
+                                                    .setCookieSpec("standard").build())
+                       .build()
       httpget = org.apache.http.client.methods.HttpGet.new(url)
       response = httpclient.execute(httpget)
       entity = response.getEntity()
@@ -46,55 +52,40 @@ module Buck
     )
   end
 
-  def self.buck_cmd
-    (
-      lambda { |command, args, &block|
-        buck = []
-        pex = Buck::download
-        buck.push(*pex)
+  def self.buck_cmd(command, args, &block)
+    buck = []
+    pex = Buck.download
+    buck.push(*pex)
 
-        args ||= []
-        buck.push(command)
-        buck.push(*args)
+    args ||= []
+    buck.push(command)
+    if command == 'build' || command == 'test' || command == 'publish'
+      buck.push('--stamp-build=detect')
+    end
+    buck.push(*args)
+    puts buck.join(' ')
 
-        pump_class = Class.new(Java::java.io.OutputStream) {
-          attr_writer :stream
-
-          def initialize
-            @output = ''
-          end
-
-          def write(b)
-            if @stream
-              @stream.write(b)
-            end
-            @output += b
-          end
-
-          def output
-            @output
-          end
-        }
-
-        err = ''
-        proc = ChildProcess.build(*buck)
-        proc.io.stdout = pump_class.new()
-        proc.io.stderr = pump_class.new()
-        if command == 'build' || command == 'publish' || command == 'test'
-          proc.io.stderr.stream = $stdout
+    output = ''
+    Open3.popen3(*buck) do |stdin, stdout, stderr, wait|
+      Thread.new do
+        while (error = stderr.gets)
+          STDERR.print(error)
         end
-        proc.start
-        proc.wait
+      end
 
-        if proc.exit_code != 0
-          raise "Buck build failed with exit code: #{proc.exit_code}
-stdout: #{proc.io.stdout.output}"
+      Thread.new do
+        while (line = stdout.gets)
+          output << line
+          STDOUT.print line
         end
+      end
 
-        block.call(proc.io.stdout.output) if block
-      }
-    )
+      stdin.close
 
+      raise "#{buck.join(' ')} failed with exit code: #{wait.value.exitstatus}" unless wait.value.success?
+    end
+
+    block.call(output) if block
   end
 
   def self.enhance_task(task)
@@ -115,7 +106,7 @@ stdout: #{proc.io.stdout.output}"
   def self.find_buck_out(target)
     out = nil
 
-    Buck::buck_cmd.call('targets', ['--show-output', target]) do |output|
+    Buck.buck_cmd('targets', ['--show-output', target]) do |output|
       sections = output.chomp.split
       # Not all buck rules have an output file.
       if sections.size > 1
@@ -150,7 +141,7 @@ def buck(*args, &block)
 
   task = Rake::Task.task_defined?(name) ? Rake::Task[name] : Rake::Task.define_task(name)
   task.enhance prereqs do
-    Buck::buck_cmd.call('build', [name])
+    Buck.buck_cmd('build',  [name])
     block.call if block
   end
 
@@ -164,13 +155,13 @@ rule /\/\/.*:run/ => [ proc {|task_name| task_name[0..-5]} ] do |task|
 
   task.enhance do
     # Figure out if this is an executable or a test target.
-    Buck::buck_cmd.call('query', [short, '--output-attributes', 'buck.type']) do |output|
+    Buck.buck_cmd('query', [short, '--output-attributes', 'buck.type']) do |output|
       hash = JSON.parse(output)
       type = hash[short]['buck.type']
       if type =~ /.*_test/
-        Buck::buck_cmd.call('test', [short])
+        Buck.buck_cmd('test', [short])
       else
-        Buck::buck_cmd.call('run', ['--verbose', '5', short])
+        Buck.buck_cmd('run', ['--verbose', '5', short])
       end
     end
   end
@@ -183,8 +174,42 @@ rule /\/\/.*:zip/ => [ proc {|task_name| task_name[0..-5]} ] do |task|
   short = task.name[0..-5]
 
   task.enhance do
+    dir, target = short[2..-1].split(':', 2)
+    working_dir = "buck-out/crazy-fun/#{dir}/#{target}_zip"
+
+    # Build the source zip
+    Buck.buck_cmd('query', ["kind(java_library, deps(#{short}))"]) do |output|
+      # Collect all the targets
+      to_build = []
+      output.lines do |line|
+        line.chomp!
+        to_build.push(line + "#src")
+      end
+
+      src_dir = "buck-out/crazy-fun/#{dir}/#{target}_src_zip"
+      src_out = "#{working_dir}/#{target}-#{version}-nodeps-sources.zip"
+      mkdir_p File.dirname(src_out)
+      rm_f src_out
+      rm_rf src_dir
+
+      mkdir_p src_dir
+      mkdir_p "#{working_dir}/lib"
+      mkdir_p "#{working_dir}/uber"
+
+      Buck.buck_cmd('build', ['--show-output'] + to_build) do |built|
+        built.lines do |line|
+          line.chomp!
+          line.split[1].each do |file|
+            next unless File.exists? file
+            sh "cd #{src_dir} && jar xf #{File.expand_path(file)}"
+          end
+        end
+      end
+      sh "cd #{src_dir} && jar cMf #{File.expand_path(src_out)} *"
+    end
+
     # Figure out if this is an executable or a test target.
-    Buck::buck_cmd.call('audit', ['classpath', short]) do |output|
+    Buck.buck_cmd('audit', ['classpath', short]) do |output|
       third_party = []
       first_party = []
 
@@ -199,13 +224,6 @@ rule /\/\/.*:zip/ => [ proc {|task_name| task_name[0..-5]} ] do |task|
         end
       end
 
-      dir, target = short[2..-1].split(':', 2)
-      working_dir = "buck-out/crazy-fun/#{dir}/#{target}_zip"
-      out = "buck-out/crazy-fun/#{dir}/#{target}.zip"
-      rm_rf working_dir
-      mkdir_p "#{working_dir}/lib"
-      mkdir_p "#{working_dir}/uber"
-
       first_party.each do |jar|
         sh "cd #{working_dir}/uber && jar xf #{jar}"
       end
@@ -214,8 +232,9 @@ rule /\/\/.*:zip/ => [ proc {|task_name| task_name[0..-5]} ] do |task|
       version = File.open('SELENIUM_VERSION', &:gets).chomp
       version = eval(version)
 
+      out = "buck-out/crazy-fun/#{dir}/#{target}.zip"
+
       sh "cd #{working_dir}/uber && jar cMf ../#{target}-#{version}-nodeps.jar *"
-      # TODO: Get the sources of all deps too and build the -src.jar
       rm_rf "#{working_dir}/uber"
 
       third_party.each do |jar|
@@ -238,7 +257,7 @@ rule /\/\/.*/ do |task|
 
   if task.class == Rake::FileTask && !task.out && File.exists?(buck_file)
     task.enhance do
-      Buck::buck_cmd.call('build', ['--deep', task.name])
+      Buck.buck_cmd('build', ['--deep', task.name])
     end
 
     Buck::enhance_task(task)

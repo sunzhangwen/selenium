@@ -24,6 +24,7 @@ import org.openqa.selenium.remote.SessionId;
 import org.openqa.selenium.remote.server.KnownElements;
 import org.openqa.selenium.remote.server.Session;
 
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -34,7 +35,7 @@ public class TestSession implements Session {
 
   private final SessionId sessionId;
   private final WebDriver driver;
-  private final Capabilities capabilities;
+  private final Map<String, Object> capabilities;
   private final KnownElements knownElements;
   private final ExecutorService executor;
   private volatile Thread inUseWithThread = null;
@@ -42,11 +43,11 @@ public class TestSession implements Session {
 
   private long lastAccess;
 
-  public TestSession(SessionId sessionId, WebDriver driver,
-      Capabilities capabilities) {
+  public TestSession(SessionId sessionId, WebDriver driver, Capabilities capabilities) {
     this.sessionId = sessionId;
     this.driver = driver;
-    this.capabilities = capabilities;
+    //noinspection unchecked
+    this.capabilities = (Map<String, Object>) capabilities.asMap();
     this.knownElements = new KnownElements();
     this.executor = new ThreadPoolExecutor(1, 1, 600L, TimeUnit.SECONDS,
         new LinkedBlockingQueue<Runnable>());
@@ -81,7 +82,7 @@ public class TestSession implements Session {
     return knownElements;
   }
 
-  public Capabilities getCapabilities() {
+  public Map<String, Object> getCapabilities() {
     return capabilities;
   }
 
@@ -92,11 +93,7 @@ public class TestSession implements Session {
     return null;
   }
 
-  public boolean isTimedOut(long timeout) {
-    return timeout > 0 && (lastAccess + timeout) < System.currentTimeMillis();
-  }
-
-  public void updateLastAccessTime() {
+  private void updateLastAccessTime() {
     lastAccess = System.currentTimeMillis();
   }
 
@@ -108,16 +105,4 @@ public class TestSession implements Session {
     return null;
   }
 
-  public boolean isInUse() {
-    return inUseWithThread != null;
-  }
-
-  public void interrupt() {
-    Thread threadToStop = inUseWithThread;
-    if (threadToStop != null) {
-      synchronized (threadToStop) {
-        threadToStop.interrupt();
-      }
-    }
-  }
 }

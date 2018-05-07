@@ -3,12 +3,23 @@ using NUnit.Framework;
 using System.Drawing;
 using System.Text.RegularExpressions;
 using OpenQA.Selenium.Environment;
+using OpenQA.Selenium.Internal;
 
 namespace OpenQA.Selenium.Interactions
 {
     [TestFixture]
     public class DragAndDropTest : DriverTestFixture
     {
+        [SetUp]
+        public void SetupTest()
+        {
+            IActionExecutor actionExecutor = driver as IActionExecutor;
+            if (actionExecutor != null)
+            {
+                actionExecutor.ResetInputState();
+            }
+        }
+
         [Test]
         [Category("Javascript")]
         [IgnoreBrowser(Browser.HtmlUnit)]
@@ -47,6 +58,23 @@ namespace OpenQA.Selenium.Interactions
 
         [Test]
         [Category("Javascript")]
+        [IgnoreBrowser(Browser.HtmlUnit)]
+        [IgnoreBrowser(Browser.Android, "Mobile browser does not support drag-and-drop")]
+        [IgnoreBrowser(Browser.IPhone, "Mobile browser does not support drag-and-drop")]
+        [IgnoreBrowser(Browser.Safari, "Advanced User Interactions not implmented on Safari")]
+        public void DragAndDropRelativeAndToElement()
+        {
+            driver.Url = dragAndDropPage;
+            IWebElement img1 = driver.FindElement(By.Id("test1"));
+            IWebElement img2 = driver.FindElement(By.Id("test2"));
+            Actions actionProvider = new Actions(driver);
+            actionProvider.DragAndDropToOffset(img1, 100, 100).DragAndDrop(img2, img1).Perform();
+            Assert.AreEqual(img1.Location, img2.Location);
+        }
+
+        [Test]
+        [Category("Javascript")]
+        [IgnoreBrowser(Browser.Safari, "Advanced User Interactions not implmented on Safari")]
         public void DragAndDropToElementInIframe()
         {
             driver.Url = iframePage;
@@ -74,6 +102,7 @@ namespace OpenQA.Selenium.Interactions
 
         [Test]
         [Category("Javascript")]
+        [IgnoreBrowser(Browser.Safari, "Advanced User Interactions not implmented on Safari")]
         public void DragAndDropElementWithOffsetInIframeAtBottom()
         {
             driver.Url = EnvironmentManager.Instance.UrlBuilder.WhereIs("iframeAtBottom.html");
@@ -91,6 +120,7 @@ namespace OpenQA.Selenium.Interactions
 
         [Test]
         [Category("Javascript")]
+        [IgnoreBrowser(Browser.Safari, "Advanced User Interactions not implmented on Safari")]
         public void DragAndDropElementWithOffsetInScrolledDiv()
         {
             if (TestUtilities.IsFirefox(driver) && TestUtilities.IsNativeEventsEnabled(driver))

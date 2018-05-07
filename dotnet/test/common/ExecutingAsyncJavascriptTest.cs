@@ -1,14 +1,14 @@
-﻿using System;
+using System;
 using NUnit.Framework;
 using System.Collections.ObjectModel;
 
 namespace OpenQA.Selenium
 {
     [TestFixture]
-    [IgnoreBrowser(Browser.Safari)]
     public class ExecutingAsyncJavascriptTest : DriverTestFixture
     {
         private IJavaScriptExecutor executor;
+        private TimeSpan originalTimeout = TimeSpan.MinValue;
 
         [SetUp]
         public void SetUpEnvironment()
@@ -18,7 +18,20 @@ namespace OpenQA.Selenium
                 executor = (IJavaScriptExecutor)driver;
             }
 
-            driver.Manage().Timeouts().AsynchronousJavaScript = TimeSpan.FromMilliseconds(0);
+            try
+            {
+                originalTimeout = driver.Manage().Timeouts().AsynchronousJavaScript;
+                driver.Manage().Timeouts().AsynchronousJavaScript = TimeSpan.FromSeconds(1);
+            }
+            catch (NotImplementedException)
+            {
+            }
+        }
+
+        [TearDown]
+        public void TearDownEnvironment()
+        {
+            driver.Manage().Timeouts().AsynchronousJavaScript = originalTimeout;
         }
 
         [Test]
@@ -153,20 +166,21 @@ namespace OpenQA.Selenium
         public void ShouldDetectPageLoadsWhileWaitingOnAnAsyncScriptAndReturnAnError()
         {
             driver.Url = ajaxyPage;
-            driver.Manage().Timeouts().AsynchronousJavaScript = TimeSpan.FromMilliseconds(100);
-            Assert.Throws<InvalidOperationException>(() => executor.ExecuteAsyncScript("window.location = '" + dynamicPage + "';"));
+            Assert.That(() => executor.ExecuteAsyncScript("window.location = '" + dynamicPage + "';"), Throws.InstanceOf<WebDriverException>());
         }
 
         [Test]
         public void ShouldCatchErrorsWhenExecutingInitialScript()
         {
             driver.Url = ajaxyPage;
-            Assert.Throws<InvalidOperationException>(() => executor.ExecuteAsyncScript("throw Error('you should catch this!');"));
+            Assert.That(() => executor.ExecuteAsyncScript("throw Error('you should catch this!');"), Throws.InstanceOf<WebDriverException>());
         }
 
         [Test]
         public void ShouldBeAbleToExecuteAsynchronousScripts()
         {
+            // Reset the timeout to the 30-second default instead of zero.
+            driver.Manage().Timeouts().AsynchronousJavaScript = TimeSpan.FromSeconds(30);
             driver.Url = ajaxyPage;
 
             IWebElement typer = driver.FindElement(By.Name("typer"));
@@ -233,10 +247,12 @@ namespace OpenQA.Selenium
         [IgnoreBrowser(Browser.Chrome, "Does not handle async alerts")]
         [IgnoreBrowser(Browser.Edge, "Does not handle async alerts")]
         [IgnoreBrowser(Browser.HtmlUnit, "Does not handle async alerts")]
-        [IgnoreBrowser(Browser.IE, "Does not handle async alerts")]
+        [IgnoreBrowser(Browser.IE, "Handling async alerts isn't done by the ExecuteAsyncScript command.")]
         [IgnoreBrowser(Browser.IPhone, "Does not handle async alerts")]
         [IgnoreBrowser(Browser.Opera, "Does not handle async alerts")]
-        public void ThrowsIfScriptTriggersAlert()
+        [IgnoreBrowser(Browser.Safari, "Does not handle async alerts")]
+        [IgnoreBrowser(Browser.Firefox, "Unexpected alert from JavaScript not handled properly. Spec difference.")]
+		public void ThrowsIfScriptTriggersAlert()
         {
             driver.Url = simpleTestPage;
             driver.Manage().Timeouts().AsynchronousJavaScript = TimeSpan.FromSeconds(5);
@@ -259,10 +275,11 @@ namespace OpenQA.Selenium
         [IgnoreBrowser(Browser.Chrome, "Does not handle async alerts")]
         [IgnoreBrowser(Browser.Edge, "Does not handle async alerts")]
         [IgnoreBrowser(Browser.HtmlUnit, "Does not handle async alerts")]
-        [IgnoreBrowser(Browser.IE, "Does not handle async alerts")]
+        [IgnoreBrowser(Browser.IE, "Handling async alerts isn't done by the ExecuteAsyncScript command.")]
         [IgnoreBrowser(Browser.IPhone, "Does not handle async alerts")]
         [IgnoreBrowser(Browser.Opera, "Does not handle async alerts")]
         [IgnoreBrowser(Browser.Safari, "Does not handle async alerts")]
+        [IgnoreBrowser(Browser.Firefox, "Unexpected alert from JavaScript not handled properly. Spec difference.")]
         public void ThrowsIfAlertHappensDuringScript()
         {
             driver.Url = slowLoadingAlertPage;
@@ -285,10 +302,11 @@ namespace OpenQA.Selenium
         [IgnoreBrowser(Browser.Chrome, "Does not handle async alerts")]
         [IgnoreBrowser(Browser.Edge, "Does not handle async alerts")]
         [IgnoreBrowser(Browser.HtmlUnit, "Does not handle async alerts")]
-        [IgnoreBrowser(Browser.IE, "Does not handle async alerts")]
+        [IgnoreBrowser(Browser.IE, "Handling async alerts isn't done by the ExecuteAsyncScript command.")]
         [IgnoreBrowser(Browser.IPhone, "Does not handle async alerts")]
         [IgnoreBrowser(Browser.Opera, "Does not handle async alerts")]
         [IgnoreBrowser(Browser.Safari, "Does not handle async alerts")]
+        [IgnoreBrowser(Browser.Firefox, "Unexpected alert from JavaScript not handled properly. Spec difference.")]
         public void ThrowsIfScriptTriggersAlertWhichTimesOut()
         {
             driver.Url = simpleTestPage;
@@ -312,9 +330,11 @@ namespace OpenQA.Selenium
         [IgnoreBrowser(Browser.Chrome, "Does not handle async alerts")]
         [IgnoreBrowser(Browser.Edge, "Does not handle async alerts")]
         [IgnoreBrowser(Browser.HtmlUnit, "Does not handle async alerts")]
-        [IgnoreBrowser(Browser.IE, "Does not handle async alerts")]
+        [IgnoreBrowser(Browser.IE, "Handling async alerts isn't done by the ExecuteAsyncScript command.")]
         [IgnoreBrowser(Browser.IPhone, "Does not handle async alerts")]
         [IgnoreBrowser(Browser.Opera, "Does not handle async alerts")]
+        [IgnoreBrowser(Browser.Safari, "Does not handle async alerts")]
+        [IgnoreBrowser(Browser.Firefox, "Unexpected alert from JavaScript not handled properly. Spec difference.")]
         public void ThrowsIfAlertHappensDuringScriptWhichTimesOut()
         {
             driver.Url = slowLoadingAlertPage;
@@ -337,10 +357,11 @@ namespace OpenQA.Selenium
         [IgnoreBrowser(Browser.Chrome, "Does not handle async alerts")]
         [IgnoreBrowser(Browser.Edge, "Does not handle async alerts")]
         [IgnoreBrowser(Browser.HtmlUnit, "Does not handle async alerts")]
-        [IgnoreBrowser(Browser.IE, "Does not handle async alerts")]
+        [IgnoreBrowser(Browser.IE, "Handling async alerts isn't done by the ExecuteAsyncScript command.")]
         [IgnoreBrowser(Browser.IPhone, "Does not handle async alerts")]
         [IgnoreBrowser(Browser.Opera, "Does not handle async alerts")]
         [IgnoreBrowser(Browser.Safari, "Does not handle async alerts")]
+        [IgnoreBrowser(Browser.Firefox, "Unexpected alert from JavaScript not handled properly. Spec difference.")]
         public void IncludesAlertTextInUnhandledAlertException()
         {
             driver.Manage().Timeouts().AsynchronousJavaScript = TimeSpan.FromSeconds(5);

@@ -27,7 +27,9 @@ import org.junit.Test;
 import org.openqa.grid.common.RegistrationRequest;
 import org.openqa.grid.internal.mock.GridHelper;
 import org.openqa.grid.internal.mock.MockedRequestHandler;
+import org.openqa.grid.internal.utils.configuration.GridHubConfiguration;
 import org.openqa.grid.internal.utils.configuration.GridNodeConfiguration;
+import org.openqa.grid.web.Hub;
 import org.openqa.selenium.remote.CapabilityType;
 import org.openqa.selenium.remote.DesiredCapabilities;
 
@@ -41,8 +43,8 @@ import java.util.Map;
  */
 public class LoadBalancedTests {
 
-  private Registry registry;
-  private Registry registry2;
+  private GridRegistry registry;
+  private GridRegistry registry2;
 
   private BaseRemoteProxy proxy1;
   private BaseRemoteProxy proxy2;
@@ -50,8 +52,8 @@ public class LoadBalancedTests {
 
   @Before
   public void setup() {
-    registry = Registry.newInstance();
-    registry2 = Registry.newInstance();
+    registry = DefaultGridRegistry.newInstance(new Hub(new GridHubConfiguration()));
+    registry2 = DefaultGridRegistry.newInstance(new Hub(new GridHubConfiguration()));
 
     register5ProxiesOf5Slots();
     register3ProxiesVariableSlotSize();
@@ -62,7 +64,7 @@ public class LoadBalancedTests {
   private void register5ProxiesOf5Slots() {
     // add 5 proxies. Total = 5 proxies * 5 slots each = 25 firefox.
     for (int i = 0; i < 5; i++) {
-      registry.add(new DetachedRemoteProxy(getRequestOfNSlots(5, "name" + i), registry));
+      registry.add(new BaseRemoteProxy(getRequestOfNSlots(5, "name" + i), registry));
     }
   }
 
@@ -71,9 +73,9 @@ public class LoadBalancedTests {
   // proxy 2 -> 4 slots
   // proxy 3 -> 6 slots
   private void register3ProxiesVariableSlotSize() {
-    proxy1 = new DetachedRemoteProxy(getRequestOfNSlots(2, "proxy1"), registry2);
-    proxy2 = new DetachedRemoteProxy(getRequestOfNSlots(4, "proxy2"), registry2);
-    proxy3 = new DetachedRemoteProxy(getRequestOfNSlots(6, "proxy3"), registry2);
+    proxy1 = new BaseRemoteProxy(getRequestOfNSlots(2, "proxy1"), registry2);
+    proxy2 = new BaseRemoteProxy(getRequestOfNSlots(4, "proxy2"), registry2);
+    proxy3 = new BaseRemoteProxy(getRequestOfNSlots(6, "proxy3"), registry2);
 
     registry2.add(proxy1);
     registry2.add(proxy2);
@@ -104,7 +106,7 @@ public class LoadBalancedTests {
       assertNotNull(session);
       assertEquals(2, session.getSlot().getProxy().getTotalUsed());
       // and release
-      registry.terminateSynchronousFOR_TEST_ONLY(session);
+      ((DefaultGridRegistry) registry).terminateSynchronousFOR_TEST_ONLY(session);
     }
 
     // at that point, 1 FF per proxy
@@ -153,7 +155,7 @@ public class LoadBalancedTests {
 
     //release and check the resource are freed.
     for (TestSession session : sessions) {
-      registry.terminateSynchronousFOR_TEST_ONLY(session);
+      ((DefaultGridRegistry) registry).terminateSynchronousFOR_TEST_ONLY(session);
     }
     assertEquals(50, proxy1.getResourceUsageInPercent(), 0f);
     assertEquals(25, proxy2.getResourceUsageInPercent(), 0f);

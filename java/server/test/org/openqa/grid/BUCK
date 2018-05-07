@@ -1,3 +1,4 @@
+# BUILD FILE SYNTAX: SKYLARK
 SUITES = glob([
   'internal/**/*Tests.java',
   'plugin/**/*Tests.java',
@@ -11,10 +12,8 @@ java_test(name = 'grid',
     '//java/client/src/org/openqa/selenium/remote:remote',
     '//java/server/src/org/openqa/grid:grid',
     '//third_party/java/beust:jcommander',
-    '//third_party/java/gson:gson',
-    '//third_party/java/httpcomponents:httpclient',
+    '//third_party/java/guava:guava',
     '//third_party/java/junit:junit',
-    '//third_party/java/servlet:servlet-api',
   ],
 )
 
@@ -23,14 +22,17 @@ java_library(name = 'test',
     'internal/**/*.java',
     'plugin/**/*.java',
     'web/**/*.java'
-  ], excludes = SUITES),
+  ], exclude = SUITES),
   deps = [
     '//java/client/src/com/thoughtworks/selenium:leg-rc',
     '//java/client/src/org/openqa/selenium:selenium',
     '//java/client/src/org/openqa/selenium/remote:remote',
+    '//java/client/src/org/openqa/selenium/firefox:firefox',
+    '//java/client/src/org/openqa/selenium/safari:safari',
     '//java/client/src/org/openqa/selenium/support/ui:wait',
     '//java/server/src/org/openqa/grid:grid',
     '//java/server/src/org/openqa/selenium/remote/server:server',
+    '//java/client/test/org/openqa/selenium/testing:test-base',
     '//java/server/test/org/openqa/testing:test-base',
     '//third_party/java/beust:jcommander',
     '//third_party/java/gson:gson',
@@ -38,7 +40,10 @@ java_library(name = 'test',
     '//third_party/java/httpcomponents:httpclient',
     '//third_party/java/jetty:jetty',
     '//third_party/java/junit:junit',
-    '//third_party/java/mockito:mockito',
-    '//third_party/java/servlet:servlet-api',
+    '//third_party/java/mockito:mockito-core',
+    '//third_party/java/servlet:javax.servlet-api',
+  ],
+  visibility = [
+    '//java/server/test/org/openqa/grid/selenium/proxy:proxy',
   ],
 )

@@ -15,7 +15,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-
 package org.openqa.selenium.chrome;
 
 import com.google.common.collect.ImmutableMap;
@@ -129,7 +128,7 @@ public class ChromeDriver extends RemoteWebDriver
    * and shutdown upon calling {@link #quit()}.
    *
    * @param service The service to use.
-   * @see #ChromeDriver(ChromeDriverService, ChromeOptions)
+   * @see RemoteWebDriver#RemoteWebDriver(org.openqa.selenium.remote.CommandExecutor, Capabilities)
    */
   public ChromeDriver(ChromeDriverService service) {
     this(service, new ChromeOptions());
@@ -141,7 +140,9 @@ public class ChromeDriver extends RemoteWebDriver
    *
    * @param capabilities The capabilities required from the ChromeDriver.
    * @see #ChromeDriver(ChromeDriverService, Capabilities)
+   * @deprecated Use {@link ChromeDriver(ChromeOptions)} instead.
    */
+  @Deprecated
   public ChromeDriver(Capabilities capabilities) {
     this(ChromeDriverService.createDefaultService(), capabilities);
   }
@@ -164,7 +165,7 @@ public class ChromeDriver extends RemoteWebDriver
    * @param options The options to use.
    */
   public ChromeDriver(ChromeDriverService service, ChromeOptions options) {
-    this(service, options.toCapabilities());
+    this(service, (Capabilities) options);
   }
 
   /**
@@ -173,11 +174,13 @@ public class ChromeDriver extends RemoteWebDriver
    *
    * @param service The service to use.
    * @param capabilities The capabilities required from the ChromeDriver.
+   * @deprecated Use {@link ChromeDriver(ChromeDriverService, ChromeOptions)} instead.
    */
+  @Deprecated
   public ChromeDriver(ChromeDriverService service, Capabilities capabilities) {
     super(new ChromeDriverCommandExecutor(service), capabilities);
     locationContext = new RemoteLocationContext(getExecuteMethod());
-    webStorage = new  RemoteWebStorage(getExecuteMethod());
+    webStorage = new RemoteWebStorage(getExecuteMethod());
     touchScreen = new RemoteTouchScreen(getExecuteMethod());
     networkConnection = new RemoteNetworkConnection(getExecuteMethod());
   }
@@ -232,5 +235,5 @@ public class ChromeDriver extends RemoteWebDriver
   public void launchApp(String id) {
     execute(ChromeDriverCommand.LAUNCH_APP, ImmutableMap.of("id", id));
   }
-  
+
 }

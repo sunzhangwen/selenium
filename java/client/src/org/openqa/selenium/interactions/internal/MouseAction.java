@@ -15,7 +15,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-
 package org.openqa.selenium.interactions.internal;
 
 import com.google.common.collect.ImmutableList;
@@ -26,7 +25,6 @@ import org.openqa.selenium.interactions.IsInteraction;
 import org.openqa.selenium.interactions.Mouse;
 import org.openqa.selenium.interactions.PointerInput;
 import org.openqa.selenium.interactions.PointerInput.Origin;
-import org.openqa.selenium.internal.Locatable;
 
 import java.time.Duration;
 import java.util.Optional;

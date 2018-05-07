@@ -15,24 +15,24 @@
 // specific language governing permissions and limitations
 // under the License.
 
-
 package org.openqa.grid.web.servlet.handler;
-
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 
 import org.openqa.grid.common.exception.GridException;
 import org.openqa.grid.internal.ExternalSessionKey;
-import org.openqa.grid.internal.Registry;
-import org.openqa.selenium.remote.JsonToBeanConverter;
+import org.openqa.grid.internal.GridRegistry;
+import org.openqa.selenium.Capabilities;
+import org.openqa.selenium.remote.NewSessionPayload;
 
+import java.io.Reader;
+import java.io.StringReader;
+import java.util.HashMap;
 import java.util.Map;
 
 import javax.servlet.http.HttpServletRequest;
 
 public class WebDriverRequest extends SeleniumBasedRequest {
 
-  public WebDriverRequest(HttpServletRequest httpServletRequest, Registry registry) {
+  public WebDriverRequest(HttpServletRequest httpServletRequest, GridRegistry registry) {
     super(httpServletRequest, registry);
   }
 
@@ -61,16 +61,17 @@ public class WebDriverRequest extends SeleniumBasedRequest {
   @Override
   public Map<String, Object> extractDesiredCapability() {
     String json = getBody();
-    try {
-      JsonObject map = new JsonParser().parse(json).getAsJsonObject();
-      // Current W3C has required / desired capabilities wrapped in a 'capabilites' object.
-      // This will need to be updated if/when https://github.com/w3c/webdriver/pull/327 gets merged
-      if (map.has("capabilities")) {
-        return new JsonToBeanConverter().convert(Map.class, map.getAsJsonObject("capabilities").getAsJsonObject("desiredCapabilities"));
-      }
-      JsonObject dc = map.get("desiredCapabilities").getAsJsonObject();
-      return new JsonToBeanConverter().convert(Map.class, dc);
 
+    try (Reader in = new StringReader(json);
+         NewSessionPayload payload = NewSessionPayload.create(in)) {
+      Capabilities caps = payload.stream()
+          .findFirst()
+          .orElseThrow(() -> new GridException("No capabilities found in request: " + json));
+      Map<String, Object> toReturn = new HashMap<>();
+      toReturn.putAll(caps.asMap());
+      return toReturn;
+    } catch (GridException e) {
+      throw e;
     } catch (Exception e) {
       throw new GridException("Cannot extract a capabilities from the request: " + json, e);
     }

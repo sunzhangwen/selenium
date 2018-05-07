@@ -25,9 +25,10 @@ import org.junit.Test;
 import org.openqa.grid.common.GridRole;
 import org.openqa.grid.e2e.utils.GridTestHelper;
 import org.openqa.grid.e2e.utils.RegistryTestHelper;
-import org.openqa.grid.internal.Registry;
+import org.openqa.grid.internal.GridRegistry;
 import org.openqa.grid.internal.listeners.Prioritizer;
 import org.openqa.grid.internal.utils.SelfRegisteringRemote;
+import org.openqa.grid.internal.utils.configuration.GridHubConfiguration;
 import org.openqa.grid.web.Hub;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.remote.DesiredCapabilities;
@@ -43,7 +44,7 @@ import java.util.Map;
 public class WebDriverPriorityDemo {
 
   private Hub hub = null;
-  private Registry registry = null;
+  private GridRegistry registry = null;
 
   private SelfRegisteringRemote remote = null;
 
@@ -63,22 +64,17 @@ public class WebDriverPriorityDemo {
 
     // start a small grid that only has 1 testing slot : htmlunit
 
-    hub = GridTestHelper.getHub();
-    registry = hub.getRegistry();
-
-    hubURL = hub.getUrl();
-    driverURL = hub.getWebDriverHubRequestURL();
-    consoleURL = hub.getConsoleURL();
 
     // assigning a priority rule where requests with the flag "important" go first.
-    registry.getConfiguration().prioritizer = new Prioritizer() {
+    GridHubConfiguration hubConfiguration = new GridHubConfiguration();
+    hubConfiguration.prioritizer = new Prioritizer() {
       public int compareTo(Map<String, Object> a, Map<String, Object> b) {
         boolean aImportant =
-            a.get("_important") == null ? false : Boolean.parseBoolean(a.get("_important")
-                                                                           .toString());
+            a.get("grid:important") == null ? false : Boolean.parseBoolean(a.get("grid:important")
+                                                                               .toString());
         boolean bImportant =
-            b.get("_important") == null ? false : Boolean.parseBoolean(b.get("_important")
-                                                                           .toString());
+            b.get("grid:important") == null ? false : Boolean.parseBoolean(b.get("grid:important")
+                                                                               .toString());
         if (aImportant == bImportant) {
           return 0;
         }
@@ -89,11 +85,19 @@ public class WebDriverPriorityDemo {
       }
     };
 
+    hub = GridTestHelper.getHub(hubConfiguration, true);
+    registry = hub.getRegistry();
+
+    hubURL = hub.getUrl();
+    driverURL = hub.getWebDriverHubRequestURL();
+    consoleURL = hub.getConsoleURL();
+
+
     // initialize node
 
     browser = GridTestHelper.getDefaultBrowserCapability();
     important_browser = GridTestHelper.getDefaultBrowserCapability();
-    important_browser.setCapability("_important", true);
+    important_browser.setCapability("grid:important", true);
 
     remote = GridTestHelper.getRemoteWithoutCapabilities(hubURL, GridRole.NODE);
     remote.addBrowser(browser, 1);
@@ -179,7 +183,6 @@ public class WebDriverPriorityDemo {
   @Test(timeout = 20000)
   public void test5ValidateStateAndPickTheImportantOne() throws InterruptedException {
     try {
-
       // closing the running test.
       runningOne.quit();
 

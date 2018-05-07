@@ -1,5 +1,3 @@
-# encoding: utf-8
-#
 # Licensed to the Software Freedom Conservancy (SFC) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -32,6 +30,11 @@ module Selenium
         #
 
         def save_screenshot(png_path)
+          extension = File.extname(png_path).downcase
+          if extension != '.png'
+            WebDriver.logger.warn "name used for saved screenshot does not match file type. "\
+                                  "It should end with .png extension"
+          end
           File.open(png_path, 'wb') { |f| f << screenshot_as(:png) }
         end
 

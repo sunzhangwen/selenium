@@ -1,5 +1,3 @@
-# encoding: utf-8
-#
 # Licensed to the Software Freedom Conservancy (SFC) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -26,7 +24,7 @@ module Selenium
       module Http
         # @api private
         class Default < Common
-          attr_accessor :proxy
+          attr_writer :proxy
 
           attr_accessor :open_timeout
           attr_accessor :read_timeout
@@ -45,7 +43,7 @@ module Selenium
           # @param [Numeric] value - Timeout in seconds to apply to both open timeout and read timeouts.
           # @deprecated Please set the specific desired timeout {#read_timeout} or {#open_timeout} directly.
           def timeout=(value)
-            Kernel.warn 'Selenium::WebDriver::Remote::Http::Default#timeout= is deprecated. Use #read_timeout= or #open_timeout= instead'
+            WebDriver.logger.deprecate ':timeout=', '#read_timeout= and #open_timeout='
             self.open_timeout = value
             self.read_timeout = value
           end
@@ -86,7 +84,7 @@ module Selenium
               # http://msdn.microsoft.com/en-us/library/aa560610%28v=bts.20%29.aspx
               raise if retries >= MAX_RETRIES
               retries += 1
-
+              sleep 2
               retry
             rescue Errno::EADDRNOTAVAIL => ex
               # a retry is sometimes needed when the port becomes temporarily unavailable
@@ -94,7 +92,6 @@ module Selenium
               retries += 1
               sleep 2
               retry
-
             rescue Errno::ECONNREFUSED => ex
               raise ex.class, "using proxy: #{proxy.http}" if use_proxy?
               raise

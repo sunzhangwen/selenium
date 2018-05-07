@@ -66,6 +66,17 @@ std::wstring StringUtilities::ToWString(const std::string& input) {
   } else {
     output = &output_buffer[0];
   }
+
+  if (output.size() > 0) {
+    if (FALSE == ::IsNormalizedString(NormalizationC, output.c_str(), -1)) {
+      int required = ::NormalizeString(NormalizationC, output.c_str(), -1, NULL, 0);
+      output_buffer.clear();
+      output_buffer.resize(required);
+      ::NormalizeString(NormalizationC, output.c_str(), -1, &output_buffer[0], output_buffer.size());
+      output = &output_buffer[0];
+    }
+  }
+
   return output;
 }
 
@@ -209,6 +220,31 @@ void StringUtilities::Split(const std::wstring& input,
     }
     tokens->push_back(token);
   }
+}
+
+std::wstring StringUtilities::CreateGuid() {
+  UUID guid;
+  RPC_WSTR guid_string = NULL;
+  RPC_STATUS status = ::UuidCreate(&guid);
+  if (status != RPC_S_OK) {
+    // If we encounter an error, not bloody much we can do about it.
+    // Just log it and continue.
+    // LOG(WARN) << "UuidCreate returned a status other then RPC_S_OK: " << status;
+  }
+  status = ::UuidToString(&guid, &guid_string);
+  if (status != RPC_S_OK) {
+    // If we encounter an error, not bloody much we can do about it.
+    // Just log it and continue.
+    // LOG(WARN) << "UuidToString returned a status other then RPC_S_OK: " << status;
+  }
+
+  // RPC_WSTR is currently typedef'd in RpcDce.h (pulled in by rpc.h)
+  // as unsigned short*. It needs to be typedef'd as wchar_t*
+  wchar_t* cast_guid_string = reinterpret_cast<wchar_t*>(guid_string);
+  std::wstring returned_guid(cast_guid_string);
+
+  ::RpcStringFree(&guid_string);
+  return returned_guid;
 }
 
 } // namespace webdriver

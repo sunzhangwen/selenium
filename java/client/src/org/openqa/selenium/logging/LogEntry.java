@@ -17,6 +17,8 @@
 
 package org.openqa.selenium.logging;
 
+import org.openqa.selenium.Beta;
+
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
@@ -29,12 +31,7 @@ import java.util.logging.Level;
 public class LogEntry {
 
   private static final ThreadLocal<SimpleDateFormat> DATE_FORMAT =
-      new ThreadLocal<SimpleDateFormat>() {
-        @Override
-        protected SimpleDateFormat initialValue() {
-          return new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ");
-        }
-      };
+      ThreadLocal.withInitial(() -> new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ"));
 
   private final Level level;
   private final long timestamp;
@@ -84,7 +81,8 @@ public class LogEntry {
                          DATE_FORMAT.get().format(new Date(timestamp)), level, message);
   }
 
-  public Map<String, Object> toMap() {
+  @Beta
+  public Map<String, Object> toJson() {
     Map<String, Object> map = new HashMap<>();
     map.put("timestamp", timestamp);
     map.put("level", level);

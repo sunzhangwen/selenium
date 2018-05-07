@@ -1,5 +1,3 @@
-# encoding: utf-8
-#
 # Licensed to the Software Freedom Conservancy (SFC) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -45,7 +43,7 @@ module Selenium
             if Net::HTTP::Persistent::VERSION >= '3'
               Net::HTTP::Persistent.new name: 'webdriver', proxy: proxy
             else
-              warn 'Support for this version of net-http-persistent is deprecated. Please upgrade.'
+              WebDriver.logger.warn 'Support for this version of net-http-persistent is deprecated. Please upgrade.'
               Net::HTTP::Persistent.new 'webdriver', proxy
             end
           end

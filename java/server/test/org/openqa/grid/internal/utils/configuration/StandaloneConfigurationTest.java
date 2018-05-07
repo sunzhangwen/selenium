@@ -24,13 +24,12 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Maps;
-
-import com.beust.jcommander.JCommander;
 
 import org.junit.Test;
+import org.openqa.grid.internal.cli.StandaloneCliOptions;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -43,7 +42,8 @@ public class StandaloneConfigurationTest {
     assertEquals(StandaloneConfiguration.DEFAULT_BROWSER_TIMEOUT, sc.browserTimeout);
     assertEquals(StandaloneConfiguration.DEFAULT_DEBUG_TOGGLE, sc.debug);
     assertEquals(StandaloneConfiguration.DEFAULT_TIMEOUT, sc.timeout);
-    assertFalse(sc.help);
+    assertEquals(StandaloneConfiguration.DEFAULT_PORT, sc.port);
+    assertEquals(null, sc.host);
     assertNull(sc.jettyMaxThreads);
     assertNull(sc.log);
   }
@@ -52,35 +52,35 @@ public class StandaloneConfigurationTest {
   public void testConstructorEqualsDefaultConfig() {
     StandaloneConfiguration actual = new StandaloneConfiguration();
     StandaloneConfiguration expected =
-      StandaloneConfiguration.loadFromJSON(StandaloneConfiguration.DEFAULT_STANDALONE_CONFIG_FILE);
+      StandaloneConfiguration.loadFromJson(StandaloneConfiguration.DEFAULT_STANDALONE_CONFIG_FILE, StandaloneConfiguration.class);
 
     assertEquals(expected.role, actual.role);
     assertEquals(expected.browserTimeout, actual.browserTimeout);
     assertEquals(expected.debug, actual.debug);
     assertEquals(expected.timeout, actual.timeout);
-    assertEquals(expected.help, actual.help);
     assertEquals(expected.jettyMaxThreads, actual.jettyMaxThreads);
     assertEquals(expected.log, actual.log);
+    assertEquals(expected.port, actual.port);
+    assertEquals(null, actual.host);
   }
 
   @Test
-  public void commandLineParsing() throws Exception {
-    StandaloneConfiguration sc = new StandaloneConfiguration();
+  public void commandLineParsing() {
     String[] args = "-timeout 32123 -browserTimeout 456".split(" ");
-    new JCommander(sc, args);
+    StandaloneConfiguration sc = new StandaloneCliOptions().parse(args).toConfiguration();
     assertEquals(32123, sc.timeout.intValue());
     assertEquals(456, sc.browserTimeout.intValue());
   }
 
   @Test
-  public void testSetTimeout() throws Exception {
+  public void testSetTimeout() {
     StandaloneConfiguration sc = new StandaloneConfiguration();
     sc.timeout = 123;
     assertEquals(123, sc.timeout.intValue());
   }
 
   @Test
-  public void testSetBrowserTimeout() throws Exception {
+  public void testSetBrowserTimeout() {
     StandaloneConfiguration sc = new StandaloneConfiguration();
     sc.browserTimeout = 1233;
     assertEquals(1233, sc.browserTimeout.intValue());
@@ -118,14 +118,14 @@ public class StandaloneConfigurationTest {
     assertFalse(sc.isMergeAble(null, "b"));
 
     // test with Collections
-    assertTrue(sc.isMergeAble(Arrays.asList(new String[]{"a", "b"}),
-                              Arrays.asList(new String[]{"b", "c"})));
-    assertTrue(sc.isMergeAble(Arrays.asList(new String[]{"a", "b"}),
-                              Arrays.asList(new String[]{"a", "b"})));
-    assertTrue(sc.isMergeAble(Arrays.asList(new String[]{"b", "c"}), Arrays.asList()));
-    assertTrue(sc.isMergeAble(Arrays.asList(new String[]{"b", "c"}), null));
-    assertFalse(sc.isMergeAble(Arrays.asList(), Arrays.asList(new String[]{"b", "c"})));
-    assertFalse(sc.isMergeAble(null, Arrays.asList(new String[]{"b", "c"})));
+    assertTrue(sc.isMergeAble(Arrays.asList("a", "b"),
+                              Arrays.asList("b", "c")));
+    assertTrue(sc.isMergeAble(Arrays.asList("a", "b"),
+                              Arrays.asList("a", "b")));
+    assertTrue(sc.isMergeAble(Arrays.asList("b", "c"), Collections.emptyList()));
+    assertTrue(sc.isMergeAble(Arrays.asList("b", "c"), null));
+    assertFalse(sc.isMergeAble(Collections.emptyList(), Arrays.asList("b", "c")));
+    assertFalse(sc.isMergeAble(null, Arrays.asList("b", "c")));
 
     // test with Maps
     Map<String, Integer> map = new ImmutableMap.Builder<String, Integer>()
@@ -138,7 +138,7 @@ public class StandaloneConfigurationTest {
 
     Map<String, Integer> map3 = new HashMap<>();
     map3.put("five", 5);
-    assertTrue(sc.isMergeAble(map3, Maps.newHashMap()));
+    assertTrue(sc.isMergeAble(map3, new HashMap<>()));
 
     assertFalse(sc.isMergeAble(new ImmutableMap.Builder<String, Integer>().build(), map3));
     assertFalse(sc.isMergeAble(null, map3));
@@ -150,7 +150,6 @@ public class StandaloneConfigurationTest {
     StandaloneConfiguration other = new StandaloneConfiguration();
     other.browserTimeout = 5000;
     other.debug = true;
-    other.help = true;
     other.jettyMaxThreads = 1000;
     other.log = "foo.log";
     other.port = 4321;
@@ -165,7 +164,6 @@ public class StandaloneConfigurationTest {
     assertNotEquals(other.debug, sc.debug);
     assertNotEquals(other.port, sc.port);
     assertNotEquals(other.log, sc.log);
-    assertNotEquals(other.help, sc.help);
     assertNotEquals(other.role, sc.role);
   }
 

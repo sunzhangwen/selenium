@@ -1,4 +1,4 @@
-﻿// <copyright file="RemoteWebElement.cs" company="WebDriver Committers">
+// <copyright file="RemoteWebElement.cs" company="WebDriver Committers">
 // Licensed to the Software Freedom Conservancy (SFC) under one
 // or more contributor license agreements. See the NOTICE file
 // distributed with this work for additional information
@@ -35,6 +35,16 @@ namespace OpenQA.Selenium.Remote
     /// <seealso cref="ILocatable"/>
     public class RemoteWebElement : IWebElement, IFindsByLinkText, IFindsById, IFindsByName, IFindsByTagName, IFindsByClassName, IFindsByXPath, IFindsByPartialLinkText, IFindsByCssSelector, IWrapsDriver, ILocatable, ITakesScreenshot, IWebElementReference
     {
+        /// <summary>
+        /// The property name that represents a web element in the wire protocol.
+        /// </summary>
+        public const string ElementReferencePropertyName = "element-6066-11e4-a52e-4f735466cecf";
+
+        /// <summary>
+        /// The property name that represents a web element in the legacy dialect of the wire protocol.
+        /// </summary>
+        public const string LegacyElementReferencePropertyName = "ELEMENT";
+
         private RemoteWebDriver driver;
         private string elementId;
 
@@ -217,7 +227,8 @@ namespace OpenQA.Selenium.Remote
                 Dictionary<string, object> rawLocation;
                 if (this.driver.IsSpecificationCompliant)
                 {
-                    rawLocation = this.driver.ExecuteScript("return arguments[0].getBoundingClientRect();", this) as Dictionary<string, object>;
+                    object scriptResponse = this.driver.ExecuteScript("var rect = arguments[0].getBoundingClientRect(); return {'x': rect.left, 'y': rect.top};", this);
+                    rawLocation = scriptResponse as Dictionary<string, object>;
                 }
                 else
                 {
@@ -312,6 +323,7 @@ namespace OpenQA.Selenium.Remote
             parameters.Add("id", this.elementId);
             if (this.driver.IsSpecificationCompliant)
             {
+                parameters.Add("text", text);
                 parameters.Add("value", text.ToCharArray());
             }
             else
@@ -334,11 +346,19 @@ namespace OpenQA.Selenium.Remote
         {
             if (this.driver.IsSpecificationCompliant)
             {
+                string elementType = this.GetAttribute("type");
+                if (elementType != null && elementType == "submit")
+                {
+                    this.Click();
+                }
+                else
+                {
                 IWebElement form = this.FindElement(By.XPath("./ancestor-or-self::form"));
                 this.driver.ExecuteScript(
                     "var e = arguments[0].ownerDocument.createEvent('Event');" +
                     "e.initEvent('submit', true, true);" +
                     "if (arguments[0].dispatchEvent(e)) { arguments[0].submit(); }", form);
+                }
             }
             else
             {
@@ -438,6 +458,33 @@ namespace OpenQA.Selenium.Remote
             }
 
             return attributeValue;
+        }
+
+        /// <summary>
+        /// Gets the value of a JavaScript property of this element.
+        /// </summary>
+        /// <param name="propertyName">The name JavaScript the JavaScript property to get the value of.</param>
+        /// <returns>The JavaScript property's current value. Returns a <see langword="null"/> if the
+        /// value is not set or the property does not exist.</returns>
+        /// <exception cref="StaleElementReferenceException">Thrown when the target element is no longer valid in the document DOM.</exception>
+        public string GetProperty(string propertyName)
+        {
+            string propertyValue = string.Empty;
+            Dictionary<string, object> parameters = new Dictionary<string, object>();
+            parameters.Add("id", this.Id);
+            parameters.Add("name", propertyName);
+
+            Response commandResponse = this.Execute(DriverCommand.GetElementProperty, parameters);
+            if (commandResponse.Value == null)
+            {
+                propertyValue = null;
+            }
+            else
+            {
+                propertyValue = commandResponse.Value.ToString();
+            }
+
+            return propertyValue;
         }
 
         /// <summary>
@@ -891,7 +938,7 @@ namespace OpenQA.Selenium.Remote
             }
 
             Dictionary<string, object> parameters = new Dictionary<string, object>();
-            parameters.Add("id", this.elementId);
+            parameters.Add("id", this.Id);
             parameters.Add("other", otherAsElement.Id);
 
             Response response = this.Execute(DriverCommand.ElementEquals, parameters);
@@ -906,7 +953,7 @@ namespace OpenQA.Selenium.Remote
         Dictionary<string, object> IWebElementReference.ToDictionary()
         {
             Dictionary<string, object> elementDictionary = new Dictionary<string, object>();
-            elementDictionary.Add("element-6066-11e4-a52e-4f735466cecf", this.elementId);
+            elementDictionary.Add(ElementReferencePropertyName, this.elementId);
             return elementDictionary;
         }
 

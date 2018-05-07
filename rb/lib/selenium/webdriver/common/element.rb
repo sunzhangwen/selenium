@@ -1,5 +1,3 @@
-# encoding: utf-8
-#
 # Licensed to the Software Freedom Conservancy (SFC) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -236,6 +234,16 @@ module Selenium
       end
 
       #
+      # Get the dimensions and coordinates of this element.
+      #
+      # @return [WebDriver::Rectangle]
+      #
+
+      def rect
+        bridge.element_rect @id
+      end
+
+      #
       # Determine an element's location on the screen once it has been scrolled into view.
       #
       # @return [WebDriver::Point]
@@ -302,7 +310,11 @@ module Selenium
       #
 
       def as_json(*)
-        key = bridge.is_a?(Remote::W3CBridge) ? 'element-6066-11e4-a52e-4f735466cecf' : 'ELEMENT'
+        key = if bridge.dialect == :w3c
+                'element-6066-11e4-a52e-4f735466cecf'
+              else
+                'ELEMENT'
+              end
         @id.is_a?(Hash) ? @id : {key => @id}
       end
 

@@ -17,11 +17,10 @@
 
 package org.openqa.grid.e2e.utils;
 
-import com.beust.jcommander.JCommander;
-
 import org.openqa.grid.common.GridRole;
 import org.openqa.grid.common.RegistrationRequest;
 import org.openqa.grid.common.SeleniumProtocol;
+import org.openqa.grid.internal.cli.GridNodeCliOptions;
 import org.openqa.grid.internal.utils.SelfRegisteringRemote;
 import org.openqa.grid.internal.utils.configuration.GridHubConfiguration;
 import org.openqa.grid.internal.utils.configuration.GridNodeConfiguration;
@@ -30,7 +29,6 @@ import org.openqa.selenium.net.PortProber;
 import org.openqa.selenium.remote.DesiredCapabilities;
 import org.openqa.selenium.remote.RemoteWebDriver;
 
-import java.net.MalformedURLException;
 import java.net.URL;
 
 public class GridTestHelper {
@@ -40,9 +38,11 @@ public class GridTestHelper {
   }
 
   public static SelfRegisteringRemote getRemoteWithoutCapabilities(URL hub, GridRole role) {
-    String[] args = {"-role", "node","-host","localhost","-hub",hub.toString(),"-port",String.valueOf(PortProber.findFreePort())};
-    GridNodeConfiguration config = new GridNodeConfiguration();
-    new JCommander(config, args);
+    String[] args = {"-role", role.toString(),
+                     "-host","localhost",
+                     "-hub",hub.toString(),
+                     "-port",String.valueOf(PortProber.findFreePort())};
+    GridNodeConfiguration config = new GridNodeCliOptions().parse(args).toConfiguration();
     RegistrationRequest req = RegistrationRequest.build(config);
     SelfRegisteringRemote remote = new SelfRegisteringRemote(req);
     remote.deleteAllBrowsers();
@@ -57,10 +57,6 @@ public class GridTestHelper {
     return firefoxOnSeleniumCapability;
   }
 
-  public static DesiredCapabilities getFirefoxCapability() {
-    return DesiredCapabilities.firefox();
-  }
-
   public static DesiredCapabilities getDefaultBrowserCapability() {
     String browser = System.getProperty("webdriver.gridtest.browser");
     if (browser != null) {
@@ -68,13 +64,19 @@ public class GridTestHelper {
       caps.setBrowserName(browser);
       return caps;
     }
-    return DesiredCapabilities.chrome();
+    return DesiredCapabilities.htmlUnit();
   }
 
   public static Hub getHub() throws Exception {
-    GridHubConfiguration config = new GridHubConfiguration();
-    config.host = "localhost";
-    config.port = PortProber.findFreePort();
+    return getHub(new GridHubConfiguration(), true);
+  }
+
+  public static Hub getHub(GridHubConfiguration config, boolean dynamicallyAllocatePortOnLocalHost)
+      throws Exception {
+    if (dynamicallyAllocatePortOnLocalHost) {
+      config.host = "localhost";
+      config.port = PortProber.findFreePort();
+    }
     return getHub(config);
   }
 
@@ -84,8 +86,7 @@ public class GridTestHelper {
     return hub;
   }
 
-  public static RemoteWebDriver getRemoteWebDriver(DesiredCapabilities caps, Hub hub)
-      throws MalformedURLException {
+  public static RemoteWebDriver getRemoteWebDriver(DesiredCapabilities caps, Hub hub) {
     return new RemoteWebDriver(hub.getWebDriverHubRequestURL(), caps);
   }
 }

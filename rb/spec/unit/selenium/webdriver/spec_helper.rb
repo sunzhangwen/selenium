@@ -1,5 +1,3 @@
-# encoding: utf-8
-#
 # Licensed to the Software Freedom Conservancy (SFC) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -20,7 +18,6 @@
 require 'rubygems'
 require 'time'
 require 'rspec'
-require 'ci/reporter/rspec'
 require 'webmock/rspec'
 require 'selenium-webdriver'
 require 'securerandom'

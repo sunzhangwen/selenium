@@ -24,11 +24,14 @@ import static org.junit.Assert.assertTrue;
 import org.junit.Before;
 import org.junit.Test;
 import org.openqa.grid.common.RegistrationRequest;
-import org.openqa.grid.internal.DetachedRemoteProxy;
-import org.openqa.grid.internal.Registry;
+import org.openqa.grid.internal.BaseRemoteProxy;
+import org.openqa.grid.internal.DefaultGridRegistry;
+import org.openqa.grid.internal.GridRegistry;
 import org.openqa.grid.internal.TestSession;
 import org.openqa.grid.internal.listeners.RegistrationListener;
 import org.openqa.grid.internal.mock.GridHelper;
+import org.openqa.grid.internal.utils.configuration.GridHubConfiguration;
+import org.openqa.grid.web.Hub;
 import org.openqa.grid.web.servlet.handler.RequestHandler;
 import org.openqa.selenium.remote.CapabilityType;
 import org.openqa.selenium.remote.DesiredCapabilities;
@@ -41,9 +44,9 @@ public class RegistrationListenerTest {
 
   private boolean serverUp = false;
 
-  private class MyRemoteProxy extends DetachedRemoteProxy implements RegistrationListener {
+  private class MyRemoteProxy extends BaseRemoteProxy implements RegistrationListener {
 
-    public MyRemoteProxy(RegistrationRequest request, Registry registry) {
+    public MyRemoteProxy(RegistrationRequest request, GridRegistry registry) {
       super(request, registry);
     }
 
@@ -71,7 +74,7 @@ public class RegistrationListenerTest {
 
   @Test(timeout = 5000)
   public void testRegistration() {
-    Registry registry = Registry.newInstance();
+    GridRegistry registry = DefaultGridRegistry.newInstance(new Hub(new GridHubConfiguration()));
     registry.add(new MyRemoteProxy(req, registry));
 
     RequestHandler request = GridHelper.createNewSessionHandler(registry, app1);
@@ -89,9 +92,9 @@ public class RegistrationListenerTest {
    *
    * @author François Reynaud
    */
-  private class MyBuggyRemoteProxy extends DetachedRemoteProxy implements RegistrationListener {
+  private class MyBuggyRemoteProxy extends BaseRemoteProxy implements RegistrationListener {
 
-    public MyBuggyRemoteProxy(RegistrationRequest request, Registry registry) {
+    public MyBuggyRemoteProxy(RegistrationRequest request, GridRegistry registry) {
       super(request, registry);
     }
 
@@ -110,7 +113,7 @@ public class RegistrationListenerTest {
    */
   @Test
   public void testBugRegistration() {
-    Registry registry = Registry.newInstance();
+    GridRegistry registry = DefaultGridRegistry.newInstance(new Hub(new GridHubConfiguration()));
     registry.add(new MyBuggyRemoteProxy(req, registry));
     registry.add(new MyBuggyRemoteProxy(req, registry));
 
@@ -119,9 +122,9 @@ public class RegistrationListenerTest {
 
   private boolean slowRemoteUp = false;
 
-  private class MySlowRemoteProxy extends DetachedRemoteProxy implements RegistrationListener {
+  private class MySlowRemoteProxy extends BaseRemoteProxy implements RegistrationListener {
 
-    public MySlowRemoteProxy(RegistrationRequest request, Registry registry) {
+    public MySlowRemoteProxy(RegistrationRequest request, GridRegistry registry) {
       super(request, registry);
     }
 
@@ -143,14 +146,12 @@ public class RegistrationListenerTest {
    */
   @Test(timeout = 2000)
   public void registerSomeSlow() {
-    final Registry registry = Registry.newInstance();
+    final GridRegistry registry =
+        DefaultGridRegistry.newInstance(new Hub(new GridHubConfiguration()));
     try {
-      registry.add(new DetachedRemoteProxy(req, registry));
-      new Thread(new Runnable() { // Thread safety reviewed
-        public void run() {
-          registry.add(new MySlowRemoteProxy(req, registry));
-        }
-      }).start();
+      registry.add(new BaseRemoteProxy(req, registry));
+      // Thread safety reviewed
+      new Thread(() -> registry.add(new MySlowRemoteProxy(req, registry))).start();
 
       // slow proxy hasn't finished to start slow remote, isn't accessible via
       // the registry yet

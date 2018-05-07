@@ -23,7 +23,6 @@ for browser in browsers.keys():
     name = 'remote-%s' % browser,
     vm_args = [
       '-Dselenium.browser=%s' % browsers[browser],
-      '-Dwebdriver.firefox.marionette=false',
       '-Djs.test.timeout=20',
       '-Djs.test.dir=%s' % get_base_path(),
     ],
@@ -40,7 +39,7 @@ for browser in browsers.keys():
   )
 
 
-js_binary(name = 'client',
+closure_binary(name = 'client',
   srcs = glob(['*.js', 'ui/*.js',]),
   deps = [
     '//javascript/atoms:errors',

@@ -1,10 +1,11 @@
+# BUILD FILE SYNTAX: SKYLARK
 java_library(name = 'interactions',
   srcs = [
     'Actions.java',
     'KeyInput.java',
     'IsInteraction.java',
     'PointerInput.java',
-  ] + glob(['*Action.java', 'internal/*Action.java', 'touch/*.java'], excludes = ['Action.java']),
+  ] + glob(['*Action.java', 'internal/*Action.java', 'touch/*.java'], exclude = ['Action.java', 'IsInteraction.java']),
   exported_deps = [
     ':core',
     ':exceptions',
@@ -36,6 +37,7 @@ java_library(name = 'core',
     'SourceType.java',
     'TouchScreen.java',
     'internal/Coordinates.java',
+    'internal/Locatable.java',
   ],
   deps = [
     '//java/client/src/org/openqa/selenium:primitives',

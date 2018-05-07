@@ -17,12 +17,10 @@
 
 package org.openqa.grid.e2e.node;
 
-import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import com.google.common.base.Function;
-import com.google.common.base.Throwables;
 
 import org.junit.After;
 import org.junit.Before;
@@ -30,7 +28,7 @@ import org.junit.Test;
 import org.openqa.grid.common.GridRole;
 import org.openqa.grid.e2e.utils.GridTestHelper;
 import org.openqa.grid.e2e.utils.RegistryTestHelper;
-import org.openqa.grid.internal.Registry;
+import org.openqa.grid.internal.GridRegistry;
 import org.openqa.grid.internal.RemoteProxy;
 import org.openqa.grid.internal.utils.SelfRegisteringRemote;
 import org.openqa.grid.selenium.proxy.DefaultRemoteProxy;
@@ -38,13 +36,13 @@ import org.openqa.grid.web.Hub;
 import org.openqa.selenium.remote.server.SeleniumServer;
 import org.openqa.selenium.support.ui.FluentWait;
 
-import java.util.Iterator;
+import java.time.Duration;
 import java.util.concurrent.Callable;
 
 public class DefaultProxyIsUnregisteredIfDownForTooLongTest {
 
   private Hub hub;
-  private Registry registry;
+  private GridRegistry registry;
   private SelfRegisteringRemote remote;
 
   private String proxyId;
@@ -107,26 +105,13 @@ public class DefaultProxyIsUnregisteredIfDownForTooLongTest {
   }
 
   private Callable<Boolean> isUp(final DefaultRemoteProxy proxy) {
-    return new Callable<Boolean>() {
-      public Boolean call() throws Exception {
-        return ! proxy.isDown();
-      }
-    };
-  }
-
-  private Callable<Boolean> isDown(final DefaultRemoteProxy proxy) {
-    return new Callable<Boolean>() {
-      public Boolean call() throws Exception {
-        return proxy.isDown();
-      }
-    };
+    return () -> ! proxy.isDown();
   }
 
   private String getProxyId() throws Exception {
     RemoteProxy p = null;
-    Iterator<RemoteProxy> it = registry.getAllProxies().iterator();
-    while(it.hasNext()) {
-      p = it.next();
+    for (RemoteProxy remoteProxy : registry.getAllProxies()) {
+      p = remoteProxy;
     }
     if (p == null) {
       throw new Exception("Unable to find registered proxy at hub");
@@ -139,21 +124,18 @@ public class DefaultProxyIsUnregisteredIfDownForTooLongTest {
   }
 
   @After
-  public void tearDown() throws Exception {
+  public void tearDown() {
     hub.stop();
   }
 
   private <V> void waitFor(final Callable<V> thing) {
-    new FluentWait<Object>("").withTimeout(30, SECONDS).until(new Function<Object, V>() {
-
-      @Override
-      public V apply(Object input) {
-        try {
-          return thing.call();
-        } catch (Exception e) {
-          throw Throwables.propagate(e);
-        }
-      }
-    });
+    new FluentWait<Object>("").withTimeout(Duration.ofSeconds(30)).until(
+        (Function<Object, V>) input -> {
+          try {
+            return thing.call();
+          } catch (Exception e) {
+            throw new RuntimeException(e);
+          }
+        });
   }
 }

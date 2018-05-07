@@ -1,5 +1,3 @@
-# encoding: utf-8
-#
 # Licensed to the Software Freedom Conservancy (SFC) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -36,14 +34,20 @@ module Selenium
         private
 
         def start_process
-          server_command = [@executable_path, "--port=#{@port}", *@extra_args]
-          @process = ChildProcess.build(*server_command)
-          @process.io.stdout = @process.io.stderr = WebDriver.logger.io
+          @process = build_process(@executable_path, "--port=#{@port}", *@extra_args)
           @process.start
         end
 
         def cannot_connect_error_text
           "unable to connect to MicrosoftWebDriver #{@host}:#{@port}"
+        end
+
+        def extract_service_args(driver_opts)
+          driver_args = super
+          driver_args << "–host=#{driver_opts[:host]}" if driver_opts.key? :host
+          driver_args << "–package=#{driver_opts[:package]}" if driver_opts.key? :package
+          driver_args << "-verbose" if driver_opts[:verbose] == true
+          driver_args
         end
       end # Service
     end # Edge

@@ -50,19 +50,18 @@ public class JsonToWebElementConverter implements Function<Object, Object> {
 
     if (result instanceof Map<?, ?>) {
       Map<?, ?> resultAsMap = (Map<?, ?>) result;
-      if (resultAsMap.containsKey(Dialect.OSS.getEncodedElementKey())) {
-        RemoteWebElement element = newRemoteWebElement();
-        element.setId(String.valueOf(resultAsMap.get(Dialect.OSS.getEncodedElementKey())));
-        element.setFileDetector(driver.getFileDetector());
-        return element;
-      } else if (resultAsMap.containsKey(Dialect.W3C.getEncodedElementKey())) {
-        RemoteWebElement element = newRemoteWebElement();
-        element.setId(String.valueOf(resultAsMap.get(Dialect.W3C.getEncodedElementKey())));
-        element.setFileDetector(driver.getFileDetector());
-        return element;
+      String elementKey = getElementKey(resultAsMap);
+		  if (null != elementKey) {
+			  RemoteWebElement element = newRemoteWebElement();
+			  element.setId(String.valueOf(resultAsMap.get(elementKey)));
+			  return element;
       } else {
         return Maps.transformValues(resultAsMap, this);
       }
+    }
+
+    if (result instanceof RemoteWebElement) {
+      return setOwner((RemoteWebElement) result);
     }
 
     if (result instanceof Number) {
@@ -76,8 +75,23 @@ public class JsonToWebElementConverter implements Function<Object, Object> {
   }
 
   protected RemoteWebElement newRemoteWebElement() {
-    RemoteWebElement toReturn = new RemoteWebElement();
-    toReturn.setParent(driver);
-    return toReturn;
+    return setOwner(new RemoteWebElement());
   }
+
+  private RemoteWebElement setOwner(RemoteWebElement element) {
+    if (driver != null) {
+      element.setParent(driver);
+      element.setFileDetector(driver.getFileDetector());
+    }
+    return element;
+  }
+  private String getElementKey(Map<?, ?> resultAsMap) {
+		for (Dialect d : Dialect.values()) {
+			String elementKeyForDialect = d.getEncodedElementKey();
+			if (resultAsMap.containsKey(elementKeyForDialect)) {
+				return elementKeyForDialect;
+			}
+		}
+		return null;
+	}
 }

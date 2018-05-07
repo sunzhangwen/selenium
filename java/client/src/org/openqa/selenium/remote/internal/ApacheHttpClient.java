@@ -21,12 +21,10 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static org.apache.http.protocol.HttpCoreContext.HTTP_TARGET_HOST;
 
 import org.apache.http.Header;
-import org.apache.http.HeaderElement;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpHost;
 import org.apache.http.NoHttpResponseException;
 import org.apache.http.auth.UsernamePasswordCredentials;
-import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpGet;
@@ -46,32 +44,38 @@ import java.net.BindException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.util.concurrent.TimeUnit;
+import java.util.AbstractMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.StringTokenizer;
 
 public class ApacheHttpClient implements org.openqa.selenium.remote.http.HttpClient {
 
   private static final int MAX_REDIRECTS = 10;
+  private static final int MAX_CACHED_HOSTS = 50;
 
   private final URL url;
-  private final HttpHost targetHost;
   private final HttpClient client;
+  private final Map<Map.Entry<String, Integer>, HttpHost> cachedHosts;
 
   public ApacheHttpClient(HttpClient client, URL url) {
     this.client = checkNotNull(client, "null HttpClient");
     this.url = checkNotNull(url, "null URL");
 
-    // Some machines claim "localhost.localdomain" is the same as "localhost".
-    // This assumption is not always true.
-    String host = url.getHost().replace(".localdomain", "");
-    this.targetHost = new HttpHost(host, url.getPort(), url.getProtocol());
+    this.cachedHosts = new LinkedHashMap<Map.Entry<String, Integer>, HttpHost>(200) {
+      @Override
+      protected boolean removeEldestEntry(Map.Entry eldest) {
+        return size() > MAX_CACHED_HOSTS;
+      }
+    };
   }
 
   @Override
-  public HttpResponse execute(HttpRequest request, boolean followRedirects) throws IOException {
+  public HttpResponse execute(HttpRequest request) throws IOException {
     HttpContext context = createContext();
 
-    String requestUrl = url.toExternalForm().replaceAll("/$", "") + request.getUri();
-    HttpUriRequest httpMethod = createHttpUriRequest(request.getMethod(), requestUrl);
+    URL url = HttpUrlBuilder.toUrl(this.url, request);
+    HttpUriRequest httpMethod = createHttpUriRequest(request.getMethod(), url);
     for (String name : request.getHeaderNames()) {
       // Skip content length as it is implicitly set when the message entity is set below.
       if (!"Content-Length".equalsIgnoreCase(name)) {
@@ -81,14 +85,16 @@ public class ApacheHttpClient implements org.openqa.selenium.remote.http.HttpCli
       }
     }
 
+    if (request.getHeader("User-Agent") == null) {
+      httpMethod.addHeader("User-Agent", USER_AGENT);
+    }
+
     if (httpMethod instanceof HttpPost) {
       ((HttpPost) httpMethod).setEntity(new ByteArrayEntity(request.getContent()));
     }
 
     org.apache.http.HttpResponse response = fallBackExecute(context, httpMethod);
-    if (followRedirects) {
-      response = followRedirects(client, context, response, /* redirect count */0);
-    }
+    response = followRedirects(client, context, response, /* redirect count */0);
     return createResponse(response, context);
   }
 
@@ -98,9 +104,7 @@ public class ApacheHttpClient implements org.openqa.selenium.remote.http.HttpCli
 
     internalResponse.setStatus(response.getStatusLine().getStatusCode());
     for (Header header : response.getAllHeaders()) {
-      for (HeaderElement headerElement : header.getElements()) {
-        internalResponse.addHeader(header.getName(), headerElement.getValue());
-      }
+      internalResponse.addHeader(header.getName(), header.getValue());
     }
 
     HttpEntity entity = response.getEntity();
@@ -124,14 +128,22 @@ public class ApacheHttpClient implements org.openqa.selenium.remote.http.HttpCli
     return new BasicHttpContext();
   }
 
-  private static HttpUriRequest createHttpUriRequest(HttpMethod method, String url) {
+  private static HttpUriRequest createHttpUriRequest(HttpMethod method, URL url)
+      throws IOException {
+    URI uri = null;
+    try {
+      uri = url.toURI();
+    } catch (URISyntaxException e) {
+      throw new IOException(e);
+    }
+
     switch (method) {
       case DELETE:
-        return new HttpDelete(url);
+        return new HttpDelete(uri);
       case GET:
-        return new HttpGet(url);
+        return new HttpGet(uri);
       case POST:
-        return new HttpPost(url);
+        return new HttpPost(uri);
     }
     throw new AssertionError("Unsupported method: " + method);
   }
@@ -139,8 +151,8 @@ public class ApacheHttpClient implements org.openqa.selenium.remote.http.HttpCli
   private org.apache.http.HttpResponse fallBackExecute(
       HttpContext context, HttpUriRequest httpMethod) throws IOException {
     try {
-      return client.execute(targetHost, httpMethod, context);
-    } catch (BindException e) {
+      return client.execute(getHost(httpMethod), httpMethod, context);
+    } catch (BindException | NoHttpResponseException e) {
       // If we get this, there's a chance we've used all the local ephemeral sockets
       // Sleep for a bit to let the OS reclaim them, then try the request again.
       try {
@@ -148,16 +160,8 @@ public class ApacheHttpClient implements org.openqa.selenium.remote.http.HttpCli
       } catch (InterruptedException ie) {
         throw new RuntimeException(ie);
       }
-    } catch (NoHttpResponseException e) {
-      // If we get this, there's a chance we've used all the remote ephemeral sockets
-      // Sleep for a bit to let the OS reclaim them, then try the request again.
-      try {
-        Thread.sleep(2000);
-      } catch (InterruptedException ie) {
-        throw new RuntimeException(ie);
-      }
     }
-    return client.execute(targetHost, httpMethod, context);
+    return client.execute(getHost(httpMethod), httpMethod, context);
   }
 
   private org.apache.http.HttpResponse followRedirects(
@@ -189,14 +193,40 @@ public class ApacheHttpClient implements org.openqa.selenium.remote.http.HttpCli
 
       HttpGet get = new HttpGet(uri);
       get.setHeader("Accept", "application/json; charset=utf-8");
-      org.apache.http.HttpResponse newResponse = client.execute(targetHost, get, context);
+      org.apache.http.HttpResponse newResponse = client.execute(getHost(get), get, context);
       return followRedirects(client, context, newResponse, redirectCount + 1);
-    } catch (URISyntaxException e) {
+    } catch (URISyntaxException | IOException e) {
       throw new WebDriverException(e);
-    } catch (ClientProtocolException e) {
-      throw new WebDriverException(e);
-    } catch (IOException e) {
-      throw new WebDriverException(e);
+    }
+  }
+
+  private HttpHost getHost(HttpUriRequest method) {
+    // Some machines claim "localhost.localdomain" is the same as "localhost".
+    // This assumption is not always true.
+    String host = method.getURI().getHost().replace(".localdomain", "");
+    int port = method.getURI().getPort();
+    if (port == -1) {
+      switch (method.getURI().getScheme()) {
+        case "http":
+          port = 80;
+          break;
+
+        case "https":
+          port = 443;
+          break;
+
+        default:
+          // Do nothing
+          break;
+      }
+    }
+
+    synchronized (cachedHosts) {
+      Map.Entry<String, Integer> entry =
+          new AbstractMap.SimpleImmutableEntry<>(host, port);
+      HttpHost httpHost =
+          cachedHosts.computeIfAbsent(entry, e -> new HttpHost(e.getKey(), e.getValue()));
+      return httpHost;
     }
   }
 
@@ -236,13 +266,19 @@ public class ApacheHttpClient implements org.openqa.selenium.remote.http.HttpCli
       checkNotNull(url, "null URL");
       HttpClient client;
       if (url.getUserInfo() != null) {
+        StringTokenizer tokens = new StringTokenizer(url.getUserInfo(), ":");
         UsernamePasswordCredentials credentials =
-            new UsernamePasswordCredentials(url.getUserInfo());
+            new UsernamePasswordCredentials(tokens.nextToken(), tokens.nextToken());
         client = clientFactory.createHttpClient(credentials);
       } else {
         client = clientFactory.getHttpClient();
       }
       return new ApacheHttpClient(client, url);
+    }
+
+    @Override
+    public void cleanupIdleClients() {
+      clientFactory.cleanupIdleClients();
     }
 
     private static synchronized HttpClientFactory getDefaultHttpClientFactory() {
@@ -252,10 +288,9 @@ public class ApacheHttpClient implements org.openqa.selenium.remote.http.HttpCli
       return defaultClientFactory;
     }
   }
-  
+
+  @Deprecated
   @Override
-	public void close() throws IOException {
-	  client.getConnectionManager().closeIdleConnections(0, TimeUnit.SECONDS);		
-	}
-  
+  public void close() throws IOException {
+  }
 }

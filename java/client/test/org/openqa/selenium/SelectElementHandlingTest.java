@@ -20,17 +20,17 @@ package org.openqa.selenium;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
-import static org.openqa.selenium.testing.Driver.MARIONETTE;
+import static org.openqa.selenium.testing.Driver.HTMLUNIT;
+import static org.openqa.selenium.testing.Driver.SAFARI;
 
 import org.junit.Test;
-import org.openqa.selenium.testing.Ignore;
 import org.openqa.selenium.testing.JUnit4TestBase;
+import org.openqa.selenium.testing.NotYetImplemented;
 
 import java.util.List;
 
 public class SelectElementHandlingTest extends JUnit4TestBase {
 
-  @Ignore({MARIONETTE})
   @Test
   public void testShouldBePossibleToDeselectASingleOptionFromASelectWhichAllowsMultipleChoices() {
     driver.get(pages.formPage);
@@ -49,7 +49,6 @@ public class SelectElementHandlingTest extends JUnit4TestBase {
     assertThat(option.isSelected(), is(true));
   }
 
-  @Ignore({MARIONETTE})
   @Test
   public void testShouldBeAbleToChangeTheSelectedOptionInASelect() {
     driver.get(pages.formPage);
@@ -65,7 +64,6 @@ public class SelectElementHandlingTest extends JUnit4TestBase {
     assertThat(two.isSelected(), is(true));
   }
 
-  @Ignore({MARIONETTE})
   @Test
   public void testShouldBeAbleToSelectMoreThanOneOptionFromASelectWhichAllowsMultipleChoices() {
     driver.get(pages.formPage);
@@ -85,7 +83,6 @@ public class SelectElementHandlingTest extends JUnit4TestBase {
     }
   }
 
-  @Ignore({MARIONETTE})
   @Test
   public void testShouldSelectFirstOptionByDefaultIfNoneIsSelected() {
     driver.get(pages.formPage);
@@ -102,7 +99,6 @@ public class SelectElementHandlingTest extends JUnit4TestBase {
   }
 
   @Test
-  @Ignore(MARIONETTE)
   public void testCanSelectElementsInOptGroups() {
     driver.get(pages.selectPage);
     WebElement element = driver.findElement(By.id("two-in-group"));
@@ -127,11 +123,46 @@ public class SelectElementHandlingTest extends JUnit4TestBase {
   }
 
   @Test
-  @Ignore(MARIONETTE)
   public void testCanSelectFromMultipleSelectWhereValueIsBelowVisibleRange() {
     driver.get(pages.selectPage);
     WebElement option = driver.findElements(By.cssSelector("#selectWithMultipleLongList option")).get(4);
     option.click();
     assertThat(option.isSelected(), is(true));
+  }
+
+  @Test
+  @NotYetImplemented(SAFARI)
+  public void testCannotSetDisabledOption() {
+    driver.get(pages.selectPage);
+    WebElement element = driver.findElement(By.cssSelector("#visibility .disabled"));
+    element.click();
+    assertTrue("Expected to not be selected", !element.isSelected());
+  }
+
+  @Test
+  @NotYetImplemented(HTMLUNIT)
+  public void testCanSetHiddenOption() {
+    driver.get(pages.selectPage);
+    WebElement element = driver.findElement(By.cssSelector("#visibility .hidden"));
+    element.click();
+    assertTrue("Expected to be selected", element.isSelected());
+  }
+
+  @Test
+  @NotYetImplemented(HTMLUNIT)
+  public void testCanSetInvisibleOption() {
+    driver.get(pages.selectPage);
+    WebElement element = driver.findElement(By.cssSelector("#visibility .invisible"));
+    element.click();
+    assertTrue("Expected to be selected", element.isSelected());
+  }
+
+  @Test
+  @NotYetImplemented(SAFARI)
+  public void testCanHandleTransparentSelect() {
+    driver.get(pages.selectPage);
+    WebElement element = driver.findElement(By.cssSelector("#transparent option"));
+    element.click();
+    assertTrue("Expected to be selected", element.isSelected());
   }
 }

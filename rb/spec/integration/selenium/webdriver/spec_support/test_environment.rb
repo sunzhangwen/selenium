@@ -1,5 +1,3 @@
-# encoding: utf-8
-#
 # Licensed to the Software Freedom Conservancy (SFC) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -21,7 +19,6 @@ module Selenium
   module WebDriver
     module SpecSupport
       class TestEnvironment
-        attr_accessor :unguarded
         attr_reader :driver
 
         def initialize
@@ -29,6 +26,19 @@ module Selenium
           @create_driver_error_count = 0
 
           @driver = (ENV['WD_SPEC_DRIVER'] || :chrome).to_sym
+        end
+
+        def print_env
+          puts "\nRunning Ruby specs:\n\n"
+
+          env = current_env.merge(ruby: defined?(RUBY_DESCRIPTION) ? RUBY_DESCRIPTION : "ruby-#{RUBY_VERSION}")
+
+          just = current_env.keys.map { |e| e.to_s.size }.max
+          env.each do |key, value|
+            puts "#{key.to_s.rjust(just)}: #{value}"
+          end
+
+          puts "\n"
         end
 
         def browser
@@ -40,32 +50,29 @@ module Selenium
         end
 
         def driver_instance
-          @driver_instance ||= new_driver_instance
+          @driver_instance ||= create_driver!
         end
 
         def reset_driver!(time = 0)
           quit_driver
           sleep time
-          @driver_instance = new_driver_instance
+          driver_instance
         end
 
         def ensure_single_window
-          @driver_instance.window_handles[1..-1].each do |handle|
-            @driver_instance.switch_to.window(handle)
-            @driver_instance.close
+          driver_instance.window_handles[1..-1].each do |handle|
+            driver_instance.switch_to.window(handle)
+            driver_instance.close
           end
-          @driver_instance.switch_to.window @driver_instance.window_handles.first
+          driver_instance.switch_to.window(driver_instance.window_handles.first)
         end
 
         def quit_driver
           return unless @driver_instance
           @driver_instance.quit
+        ensure
+          `pkill -f "Safari --automation"` if browser == :safari
           @driver_instance = nil
-        end
-
-        def new_driver_instance
-          check_for_previous_error
-          create_driver
         end
 
         def app_server
@@ -99,7 +106,7 @@ module Selenium
 
         def remote_server_jar
           if ENV['DOWNLOAD_SERVER']
-            @remote_server_jar ||= "#{root.join('rb/selenium-server-standalone').to_s}-#{Selenium::Server.latest}.jar".to_s
+            @remote_server_jar ||= "#{root.join('rb/selenium-server-standalone')}-#{Selenium::Server.latest}.jar"
             @remote_server_jar = root.join("rb/#{Selenium::Server.download(:latest)}").to_s unless File.exist? @remote_server_jar
           else
             @remote_server_jar ||= root.join('buck-out/gen/java/server/src/org/openqa/grid/selenium/selenium.jar').to_s
@@ -113,12 +120,6 @@ module Selenium
           @remote_server.stop if defined? @remote_server
 
           @driver_instance = @app_server = @remote_server = nil
-        ensure
-          Guards.report
-        end
-
-        def unguarded?
-          @unguarded ||= false
         end
 
         def native_events?
@@ -130,7 +131,9 @@ module Selenium
         end
 
         def root
-          @root ||= Pathname.new('../../../../../../../').expand_path(__FILE__)
+          # prefer #realpath over #expand_path to avoid problems with UNC
+          # see https://bugs.ruby-lang.org/issues/13515
+          @root ||= Pathname.new('../../../../../../../').realpath(__FILE__)
         end
 
         def remote_capabilities
@@ -144,12 +147,6 @@ module Selenium
                            opt[:firefox_binary] = ENV['FF_ESR_BINARY']
                            opt[:marionette] = false
                            :firefox
-                         when :ff_nightly
-                           unless ENV['FF_NIGHTLY_BINARY']
-                             raise DriverInstantiationError, "ENV['FF_NIGHTLY_BINARY'] must be set to test Firefox Nightly"
-                           end
-                           opt[:firefox_binary] = ENV['FF_NIGHTLY_BINARY']
-                           :firefox
                          when :safari_preview
                            opt["safari.options"] = {'technologyPreview' => true}
                            :safari
@@ -159,7 +156,7 @@ module Selenium
 
           caps = WebDriver::Remote::Capabilities.send(browser_name, opt)
 
-          unless caps.is_a? WebDriver::Remote::W3CCapabilities
+          unless caps.is_a? WebDriver::Remote::W3C::Capabilities
             caps.javascript_enabled = true
             caps.css_selectors_enabled = true
           end
@@ -167,21 +164,42 @@ module Selenium
           caps
         end
 
-        private
+        def create_driver!(**opts, &block)
+          check_for_previous_error
 
-        def create_driver(opt = {})
           method = "create_#{driver}_driver".to_sym
           instance = if private_methods.include?(method)
-                       send method, opt
+                       send method, opts
                      else
-                       WebDriver::Driver.for(driver, opt)
+                       WebDriver::Driver.for(driver, opts)
                      end
-          @create_driver_error_count -= 1 unless @create_driver_error_count == 0
-          instance
+          @create_driver_error_count -= 1 unless @create_driver_error_count.zero?
+          if block
+            begin
+              yield(instance)
+            ensure
+              instance.quit
+            end
+          else
+            instance
+          end
         rescue => ex
           @create_driver_error = ex
           @create_driver_error_count += 1
           raise ex
+        end
+
+        private
+
+        def current_env
+          {
+            browser: browser,
+            driver: driver,
+            version: driver_instance.capabilities.version,
+            platform: Platform.os,
+            native: native_events?,
+            ci: Platform.ci
+          }
         end
 
         MAX_ERRORS = 4
@@ -222,13 +240,11 @@ module Selenium
           WebDriver::Driver.for :firefox, opt
         end
 
-        def create_ff_nightly_driver(opt = {})
-          unless ENV['FF_NIGHTLY_BINARY']
-            raise StandardError, "ENV['FF_NIGHTLY_BINARY'] must be set to test Nightly Firefox"
-          end
-          WebDriver::Firefox::Binary.path = ENV['FF_NIGHTLY_BINARY']
-          opt[:marionette] = true
-          WebDriver::Driver.for :firefox, opt
+        def create_ie_driver(opt = {})
+          opt[:desired_capabilities] ||= WebDriver::Remote::Capabilities.ie
+          opt[:desired_capabilities]['requireWindowFocus'] = true
+
+          WebDriver::Driver.for :ie, opt
         end
 
         def create_chrome_driver(opt = {})
@@ -238,21 +254,11 @@ module Selenium
           server = ENV['CHROMEDRIVER'] || ENV['chrome_server']
           WebDriver::Chrome.driver_path = server if server
 
-          opt[:args] ||= ENV['TRAVIS'] ? ['--no-sandbox'] : []
-
           WebDriver::Driver.for :chrome, opt
         end
 
-        def create_phantomjs_driver(opt = {})
-          binary = ENV['PHANTOMJS_BINARY']
-          WebDriver::PhantomJS.path = binary if binary
-          WebDriver::Driver.for :phantomjs, opt
-        end
-
         def create_safari_preview_driver(opt = {})
-          tech_preview_driver = "/Applications/Safari\ Technology\ Preview.app/Contents/MacOS/safaridriver"
-          raise DriverInstantiationError, "Install Safari Technology Preview on MacOS Sierra" unless File.exist?(tech_preview_driver)
-          opt[:driver_path] ||= tech_preview_driver
+          Safari.technology_preview!
           WebDriver::Driver.for :safari, opt
         end
 

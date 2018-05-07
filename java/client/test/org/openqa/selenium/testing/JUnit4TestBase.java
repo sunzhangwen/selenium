@@ -49,6 +49,7 @@ import org.openqa.selenium.testing.drivers.SauceDriver;
 import org.openqa.selenium.testing.drivers.WebDriverBuilder;
 
 import java.util.logging.Logger;
+import java.util.stream.Stream;
 
 @RunWith(SeleniumTestRunner.class)
 public abstract class JUnit4TestBase implements WrapsDriver {
@@ -65,7 +66,7 @@ public abstract class JUnit4TestBase implements WrapsDriver {
   protected Wait<WebDriver> shortWait;
 
   @Before
-  public void prepareEnvironment() throws Exception {
+  public void prepareEnvironment() {
     environment = GlobalTestEnvironment.get(InProcessTestEnvironment.class);
     appServer = environment.getAppServer();
 
@@ -179,37 +180,52 @@ public abstract class JUnit4TestBase implements WrapsDriver {
           throw new RuntimeException("Sauce-related failure. Tried re-creating the driver, but that failed too.", t);
         }
       } else {
-        throw Throwables.propagate(t);
+        Throwables.throwIfUnchecked(t);
+        throw new RuntimeException(t);
       }
     }
   }
 
   private class NotYetImplementedRule implements TestRule {
 
+    private boolean notImplemented(NotYetImplementedList list) {
+      return list != null && list.value().length > 0 && notImplemented(Stream.of(list.value()));
+    }
+
+    private boolean notImplemented(NotYetImplemented single) {
+      return single !=  null && notImplemented(Stream.of(single));
+    }
+
+    private boolean notImplemented(Stream<NotYetImplemented> nyi) {
+      return nyi.anyMatch(driver -> matches(browser, new Driver[]{driver.value()}));
+    }
+
     @Override
     public Statement apply(final Statement base, final Description description) {
-      final NotYetImplemented notYetImplementedBrowsers = description.getAnnotation(NotYetImplemented.class);
-      if (notYetImplementedBrowsers == null || !matches(browser, notYetImplementedBrowsers.value())) {
+      if (notImplemented(description.getAnnotation(NotYetImplementedList.class)) ||
+          notImplemented(description.getAnnotation(NotYetImplemented.class))) {
+        return new Statement() {
+          @Override
+          public void evaluate() throws Throwable {
+            Exception toBeThrown = null;
+            try {
+              base.evaluate();
+              toBeThrown = new Exception(String.format(
+                  "%s.%s is marked as not yet implemented with %s but already works!",
+                  description.getTestClass().getSimpleName(), description.getMethodName(), browser));
+            }
+            catch (final Throwable e) {
+              // expected
+            }
+            if (toBeThrown != null) {
+              throw toBeThrown;
+            }
+          }
+        };
+
+      } else {
         return base;
       }
-
-      return new Statement() {
-        @Override
-        public void evaluate() throws Throwable {
-          Exception toBeThrown = null;
-          try {
-            base.evaluate();
-            toBeThrown = new Exception(description.getTestClass().getSimpleName() + '.' + description.getMethodName()
-                                       + " is marked as not yet implemented with " + browser + " but already works!");
-          }
-          catch (final Throwable e) {
-            // expected
-          }
-          if (toBeThrown != null) {
-            throw toBeThrown;
-          }
-        }
-      };
     }
   }
 
@@ -219,7 +235,7 @@ public abstract class JUnit4TestBase implements WrapsDriver {
 
   private void createDriver() {
     driver = actuallyCreateDriver();
-    wait = new WebDriverWait(driver, 30);
+    wait = new WebDriverWait(driver, 10);
     shortWait = new WebDriverWait(driver, 5);
   }
 
@@ -278,7 +294,7 @@ public abstract class JUnit4TestBase implements WrapsDriver {
           break;
 
         case HTMLUNIT:
-          if (browser == Browser.htmlunit || browser == Browser.htmlunit_js) {
+          if (browser == Browser.htmlunit) {
             return true;
           }
           break;
@@ -289,20 +305,32 @@ public abstract class JUnit4TestBase implements WrapsDriver {
           }
           break;
 
-        case MARIONETTE:
-          if (browser == Browser.ff && Boolean.getBoolean("webdriver.firefox.marionette")) {
+        case EDGE:
+          if (browser == Browser.edge) {
             return true;
           }
           break;
 
-        case PHANTOMJS:
-          if (browser == Browser.phantomjs) {
+        case MARIONETTE:
+          if (browser != Browser.ff) {
+            return false;
+          }
+          if (System.getProperty("webdriver.firefox.marionette") == null ||
+              Boolean.getBoolean("webdriver.firefox.marionette")) {
             return true;
           }
           break;
 
         case REMOTE:
-          if (Boolean.getBoolean("selenium.browser.remote") || SauceDriver.shouldUseSauce()) {
+          if (Boolean.getBoolean("selenium.browser.grid") ||
+              Boolean.getBoolean("selenium.browser.remote") ||
+              SauceDriver.shouldUseSauce()) {
+            return true;
+          }
+          break;
+
+        case GRID:
+          if (Boolean.getBoolean("selenium.browser.grid")) {
             return true;
           }
           break;

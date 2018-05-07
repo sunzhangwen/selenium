@@ -221,7 +221,7 @@ module Javascript
       IO.read(file).each_line do |line|
         if data = @@ADD_DEP_REGEX.match(line)
           info = Info.new(File.expand_path(data[1], @closure_dir))
-          info.is_module = data[4] == "true"
+          info.is_module = (data[4] != "false" and data[4] != "{}")
           @@DEPS_FILES[file].push(info)
           @@FILES[file] = info
 
@@ -310,7 +310,7 @@ module Javascript
 
       result_list = [File.join(@closure_dir, "base.js")]
       seen_list = []
-      files.each do |file|
+      Array(files).each do |file|
         file = File.expand_path(file)
         parse_file(file)
         info = @files[file]
@@ -334,7 +334,7 @@ module Javascript
         "\\s*,\\s*",
         "\\[([^\\]]+)?\\]",        # Required symbols
         "\\s*",
-        "(?:,\\s*(true|false))?",  # Module flag.
+        "(?:,\\s*(true|false|(?:\\{[^\\}]*\\})))?",  # Module flag.
         "\\s*\\)"
     ].each {|r| r.to_s}.join('')
     @@MODULE_REGEX = /^goog\.module\s*\(\s*['"]([^'"]+)['"]\s*\)/
@@ -403,7 +403,7 @@ module Javascript
 
     def calc_deps(src_files, js_files)
       deps = ClosureDeps.new
-      js_files.each {|f| deps.parse_file(f)}
+      Array(js_files).each {|f| deps.parse_file(f)}
       deps.calc_deps(src_files).uniq
     end
 
@@ -570,7 +570,7 @@ module Javascript
         mkdir_p File.dirname(output)
 
         flag_file = File.join(File.dirname(output), "closure_flags.txt")
-        File.open(flag_file, 'w') {|f| f.write(expanded_flags)}    
+        File.open(flag_file, 'w') {|f| f.write(expanded_flags)}
 
         cmd = "java -cp third_party/closure/bin/compiler.jar com.google.javascript.jscomp.CommandLineRunner --flagfile " << flag_file
         sh cmd
@@ -824,45 +824,54 @@ module Javascript
         formatting =
             (ENV['pretty_print'] == 'true') ?  "--formatting=PRETTY_PRINT" : ""
 
-        cmd = "java -cp third_party/closure/bin/compiler.jar com.google.javascript.jscomp.CommandLineRunner " <<
-            "--js_output_file=#{output} " <<
-            "--output_wrapper=\"#{wrapper}\" " <<
-            "--compilation_level=#{compilation_level(minify)} " <<
-            "--define=goog.NATIVE_ARRAY_PROTOTYPES=false " <<
-            "--define=bot.json.NATIVE_JSON=false " <<
-            "#{defines} " <<
-            "#{formatting} " <<
-            "--jscomp_off=unknownDefines " <<
-            "--jscomp_off=deprecated " <<
-            "--jscomp_error=accessControls " <<
-            "--jscomp_error=ambiguousFunctionDecl " <<
-            "--jscomp_error=checkDebuggerStatement " <<
-            "--jscomp_error=checkRegExp " <<
-            "--jscomp_error=checkTypes " <<
-            "--jscomp_error=checkVars " <<
-            "--jscomp_error=const " <<
-            "--jscomp_error=constantProperty " <<
-            "--jscomp_error=duplicate " <<
-            "--jscomp_error=duplicateMessage " <<
-            "--jscomp_error=externsValidation " <<
-            "--jscomp_error=fileoverviewTags " <<
-            "--jscomp_error=globalThis " <<
-            "--jscomp_error=internetExplorerChecks " <<
-            "--jscomp_error=invalidCasts " <<
-            "--jscomp_error=missingProperties " <<
-            "--jscomp_error=nonStandardJsDocs " <<
-            "--jscomp_error=strictModuleDepCheck " <<
-            "--jscomp_error=typeInvalidation " <<
-            "--jscomp_error=undefinedNames " <<
-            "--jscomp_error=undefinedVars " <<
-            "--jscomp_error=uselessCode " <<
-            "--jscomp_error=visibility " <<
-            "--js='" <<
-            all_deps.join("' --js='") << "'"
+        flags = []
+        flags.push("--js_output_file=#{output}")
+        flags.push("--output_wrapper=\"#{wrapper}\"")
+        flags.push("--compilation_level=#{compilation_level(minify)}")
+        flags.push("--define=goog.NATIVE_ARRAY_PROTOTYPES=false")
+        flags.push("--define=bot.json.NATIVE_JSON=false")
+        flags.push("#{defines}")
+        flags.push("#{formatting}")
+        flags.push("--jscomp_off=unknownDefines")
+        flags.push("--jscomp_off=deprecated")
+        flags.push("--jscomp_error=accessControls")
+        flags.push("--jscomp_error=ambiguousFunctionDecl")
+        flags.push("--jscomp_error=checkDebuggerStatement")
+        flags.push("--jscomp_error=checkRegExp")
+        flags.push("--jscomp_error=checkTypes")
+        flags.push("--jscomp_error=checkVars")
+        flags.push("--jscomp_error=const")
+        flags.push("--jscomp_error=constantProperty")
+        flags.push("--jscomp_error=duplicate")
+        flags.push("--jscomp_error=duplicateMessage")
+        flags.push("--jscomp_error=externsValidation")
+        flags.push("--jscomp_error=fileoverviewTags")
+        flags.push("--jscomp_error=globalThis")
+        flags.push("--jscomp_error=internetExplorerChecks")
+        flags.push("--jscomp_error=invalidCasts")
+        flags.push("--jscomp_error=missingProperties")
+        flags.push("--jscomp_error=nonStandardJsDocs")
+        flags.push("--jscomp_error=strictModuleDepCheck")
+        flags.push("--jscomp_error=typeInvalidation")
+        flags.push("--jscomp_error=undefinedNames")
+        flags.push("--jscomp_error=undefinedVars")
+        flags.push("--jscomp_error=uselessCode")
+        flags.push("--jscomp_error=visibility")
+
+        expanded_flags = flags.join(" ") <<
+           " --js='" <<
+           all_deps.join("' --js='") << "'"
 
         mkdir_p File.dirname(output)
 
+        flag_file = File.join(File.dirname(output), "closure_flags.txt")
+        File.open(flag_file, 'w') {|f| f.write(expanded_flags)}
+
+        cmd = "java -cp third_party/closure/bin/compiler.jar com.google.javascript.jscomp.CommandLineRunner " <<
+            "--flagfile " << flag_file
+
         sh cmd
+        rm_rf flag_file
       end
 
       output_task = Rake::Task[output]

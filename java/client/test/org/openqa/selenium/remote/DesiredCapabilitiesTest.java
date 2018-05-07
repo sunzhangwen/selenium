@@ -15,11 +15,12 @@
 // specific language governing permissions and limitations
 // under the License.
 
-
 package org.openqa.selenium.remote;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -36,6 +37,7 @@ import java.util.logging.Level;
 
 @RunWith(JUnit4.class)
 public class DesiredCapabilitiesTest {
+
   @Test
   public void testAddingTheSameCapabilityToAMapTwiceShouldResultInOneEntry() {
     Map<org.openqa.selenium.Capabilities, Class<? extends WebDriver>> capabilitiesToDriver =
@@ -127,7 +129,8 @@ public class DesiredCapabilitiesTest {
     }};
 
     DesiredCapabilities caps = new DesiredCapabilities(capabilitiesMap);
-    assertEquals(caps.toString().length(), 53);
+    String expected = "key: " + createString(27) + "...";
+    assertTrue(caps.toString(), caps.toString().contains(expected));
   }
 
   @Test
@@ -139,8 +142,21 @@ public class DesiredCapabilitiesTest {
     }};
 
     DesiredCapabilities caps = new DesiredCapabilities(capabilitiesMap);
-    System.out.println(caps.toString());
-    assertEquals(caps.toString().length(), 62);
+    String expected = "{subkey: " + createString(27) + "..." + "}";
+    assertTrue(caps.toString(), caps.toString().contains(expected));
+  }
+
+  @Test
+  public void canCompareCapabilities() {
+    DesiredCapabilities caps1 = new DesiredCapabilities();
+    DesiredCapabilities caps2 = new DesiredCapabilities();
+    assertEquals(caps1, caps2);
+
+    caps1.setCapability("xxx", "yyy");
+    assertNotEquals(caps1, caps2);
+
+    caps2.setCapability("xxx", "yyy");
+    assertEquals(caps1, caps2);
   }
 
   private String createString(int length) {

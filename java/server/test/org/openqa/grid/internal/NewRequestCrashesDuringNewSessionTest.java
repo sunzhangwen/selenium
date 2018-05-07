@@ -26,6 +26,8 @@ import org.junit.Test;
 import org.openqa.grid.common.SeleniumProtocol;
 import org.openqa.grid.internal.mock.GridHelper;
 import org.openqa.grid.internal.mock.MockedRequestHandler;
+import org.openqa.grid.internal.utils.configuration.GridHubConfiguration;
+import org.openqa.grid.web.Hub;
 import org.openqa.grid.web.servlet.handler.SeleniumBasedRequest;
 import org.openqa.selenium.remote.CapabilityType;
 
@@ -36,7 +38,7 @@ import javax.servlet.http.HttpServletResponse;
 
 public class NewRequestCrashesDuringNewSessionTest {
 
-  private Registry registry;
+  private GridRegistry registry;
   private Map<String, Object> ff = new HashMap<>();
   private RemoteProxy p1;
 
@@ -45,7 +47,7 @@ public class NewRequestCrashesDuringNewSessionTest {
    */
   @Before
   public void setup() throws Exception {
-    registry = Registry.newInstance();
+    registry = DefaultGridRegistry.newInstance(new Hub(new GridHubConfiguration()));
     ff.put(CapabilityType.APPLICATION_NAME, "FF");
 
     p1 = RemoteProxyFactory.getNewBasicRemoteProxy(ff, "http://machine1:4444", registry);
@@ -95,7 +97,7 @@ public class NewRequestCrashesDuringNewSessionTest {
 
 
     public MockedBuggyNewSessionRequestHandler(SeleniumBasedRequest request,
-        HttpServletResponse response, Registry registry) {
+        HttpServletResponse response, GridRegistry registry) {
       super(request, response, registry);
     }
 

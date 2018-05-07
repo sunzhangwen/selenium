@@ -47,6 +47,7 @@ import org.apache.http.protocol.HttpContext;
 
 import java.io.IOException;
 import java.net.ProxySelector;
+import java.util.concurrent.TimeUnit;
 
 public class HttpClientFactory {
 
@@ -99,8 +100,8 @@ public class HttpClientFactory {
 
     HttpClientBuilder builder = HttpClientBuilder.create()
         .setConnectionManager(getClientConnectionManager())
-        .setDefaultSocketConfig(createSocketConfig(socketTimeout))
-        .setDefaultRequestConfig(createRequestConfig(connectionTimeout, socketTimeout))
+        .setDefaultSocketConfig(socketConfig)
+        .setDefaultRequestConfig(requestConfig)
         .setRoutePlanner(createRoutePlanner());
 
     if (credentials != null) {
@@ -154,6 +155,10 @@ public class HttpClientFactory {
       throw new RuntimeException(e);
     }
     gridClientConnectionManager.shutdown();
+  }
+
+  void cleanupIdleClients() {
+    gridClientConnectionManager.closeIdleConnections(0, TimeUnit.SECONDS);
   }
 
   static class MyRedirectHandler implements RedirectStrategy {

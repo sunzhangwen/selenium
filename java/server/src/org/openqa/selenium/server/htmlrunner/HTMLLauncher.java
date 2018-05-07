@@ -18,10 +18,10 @@
 package org.openqa.selenium.server.htmlrunner;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.openqa.selenium.firefox.FirefoxDriver.MARIONETTE;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import com.beust.jcommander.ParameterException;
 import com.thoughtworks.selenium.Selenium;
 import com.thoughtworks.selenium.webdriven.WebDriverBackedSelenium;
 
@@ -31,11 +31,10 @@ import org.openqa.selenium.WebElement;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.edge.EdgeDriver;
 import org.openqa.selenium.firefox.FirefoxDriver;
+import org.openqa.selenium.firefox.FirefoxOptions;
 import org.openqa.selenium.ie.InternetExplorerDriver;
-import org.openqa.selenium.internal.SocketLock;
 import org.openqa.selenium.net.PortProber;
 import org.openqa.selenium.opera.OperaDriver;
-import org.openqa.selenium.remote.DesiredCapabilities;
 import org.openqa.selenium.safari.SafariDriver;
 import org.seleniumhq.jetty9.server.Connector;
 import org.seleniumhq.jetty9.server.HttpConfiguration;
@@ -147,38 +146,39 @@ public class HTMLLauncher {
     }
 
     // Is the suiteURL a file?
-    Path path = Paths.get(suiteURL);
+    Path path = Paths.get(suiteURL).toAbsolutePath();
     if (Files.exists(path)) {
       // Not all drivers can read files from the disk, so we need to host the suite somewhere.
-      try (SocketLock lock = new SocketLock()) {
-        server = new Server();
-        HttpConfiguration httpConfig = new HttpConfiguration();
+      server = new Server();
+      HttpConfiguration httpConfig = new HttpConfiguration();
 
-        ServerConnector http = new ServerConnector(server, new HttpConnectionFactory(httpConfig));
-        int port = PortProber.findFreePort();
-        http.setPort(port);
-        http.setIdleTimeout(500000);
-        server.setConnectors(new Connector[]{http});
+      ServerConnector http = new ServerConnector(server, new HttpConnectionFactory(httpConfig));
+      int port = PortProber.findFreePort();
+      http.setPort(port);
+      http.setIdleTimeout(500000);
+      server.setConnectors(new Connector[]{http});
 
-        ResourceHandler handler = new ResourceHandler();
-        handler.setDirectoriesListed(true);
-        handler.setWelcomeFiles(new String[]{path.getFileName().toString(), "index.html"});
-        handler.setBaseResource(new PathResource(path.toFile().getParentFile().toPath().toRealPath()));
+      ResourceHandler handler = new ResourceHandler();
+      handler.setDirectoriesListed(true);
+      handler.setWelcomeFiles(new String[]{path.getFileName().toString(), "index.html"});
+      handler
+          .setBaseResource(new PathResource(path.toFile().getParentFile().toPath().toRealPath()));
 
-        ContextHandler context = new ContextHandler("/tests");
-        context.setHandler(handler);
+      ContextHandler context = new ContextHandler("/tests");
+      context.setHandler(handler);
 
-        server.setHandler(context);
+      server.setHandler(context);
+      try {
         server.start();
-
-        PortProber.waitForPortUp(port, 15, SECONDS);
-
-        URL serverUrl = server.getURI().toURL();
-        return new URL(serverUrl.getProtocol(), serverUrl.getHost(), serverUrl.getPort(),
-                       "/tests/");
       } catch (Exception e) {
         throw new IOException(e);
       }
+
+      PortProber.waitForPortUp(port, 15, SECONDS);
+
+      URL serverUrl = server.getURI().toURL();
+      return new URL(serverUrl.getProtocol(), serverUrl.getHost(), serverUrl.getPort(),
+                     "/tests/");
     }
 
     // Well then, it must be a URL relative to whatever the browserUrl. Probe and find out.
@@ -206,7 +206,14 @@ public class HTMLLauncher {
     Args processed = new Args();
     JCommander jCommander = new JCommander(processed);
     jCommander.setCaseSensitiveOptions(false);
-    jCommander.parse(args);
+    try {
+      jCommander.parse(args);
+    } catch (ParameterException ex) {
+      StringBuilder help = new StringBuilder();
+      jCommander.usage(help);
+      System.err.print(ex.getMessage() + "\n" + help);
+      return 0;
+    }
 
     if (processed.help) {
       StringBuilder help = new StringBuilder();
@@ -231,7 +238,8 @@ public class HTMLLauncher {
     boolean passed = true;
     for (String browser : browsers) {
       // Turns out that Windows doesn't like "*" in a path name
-      File results = resultsPath.resolve(browser.substring(1) + ".results.html").toFile();
+      String reportFileName = browser.contains(" ") ? browser.substring(0, browser.indexOf(' ')) : browser;
+      File results = resultsPath.resolve(reportFileName.substring(1) + ".results.html").toFile();
       String result = "FAILED";
 
       try {
@@ -274,15 +282,19 @@ public class HTMLLauncher {
   }
 
   private WebDriver createDriver(String browser) {
+    String[] parts = browser.split(" ", 2);
+    browser = parts[0];
     switch (browser) {
       case "*chrome":
       case "*firefox":
       case "*firefoxproxy":
       case "*firefoxchrome":
       case "*pifirefox":
-        DesiredCapabilities caps = new DesiredCapabilities();
-        caps.setCapability(MARIONETTE, true);
-        return new FirefoxDriver(caps);
+        FirefoxOptions options = new FirefoxOptions().setLegacy(false);
+        if (parts.length > 1) {
+          options.setBinary(parts[1]);
+        }
+        return new FirefoxDriver(options);
 
       case "*iehta":
       case "*iexplore":
@@ -314,7 +326,7 @@ public class HTMLLauncher {
       names = "-htmlSuite",
       required = true,
       arity = 4,
-      description = "Run an HTML Suite: '*browser' 'http://baseUrl.com' 'path\\to\\HTMLSuite.html' 'c:\\absolute\\path\\to\\my\\results.html'")
+      description = "Run an HTML Suite: \"*browser\" \"http://baseUrl.com\" \"path\\to\\HTMLSuite.html\" \"path\\to\\report\\dir\"")
     private List<String> htmlSuite;
 
     @Parameter(

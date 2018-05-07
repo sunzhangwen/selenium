@@ -18,11 +18,11 @@
 package org.openqa.selenium.remote;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Maps;
 
 import org.openqa.selenium.interactions.Mouse;
 import org.openqa.selenium.interactions.internal.Coordinates;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -37,7 +37,7 @@ public class RemoteMouse implements Mouse {
 
 
   protected Map<String, Object> paramsFromCoordinates(Coordinates where) {
-    Map<String, Object> params = Maps.newHashMap();
+    Map<String, Object> params = new HashMap<>();
 
     if (where != null) {
       String id = (String) where.getAuxiliary();
@@ -68,19 +68,19 @@ public class RemoteMouse implements Mouse {
   public void doubleClick(Coordinates where) {
     moveIfNeeded(where);
 
-    executor.execute(DriverCommand.DOUBLE_CLICK, ImmutableMap.<String, Object>of());
+    executor.execute(DriverCommand.DOUBLE_CLICK, ImmutableMap.of());
   }
 
   public void mouseDown(Coordinates where) {
     moveIfNeeded(where);
 
-    executor.execute(DriverCommand.MOUSE_DOWN, ImmutableMap.<String, Object>of());
+    executor.execute(DriverCommand.MOUSE_DOWN, ImmutableMap.of());
   }
 
   public void mouseUp(Coordinates where) {
     moveIfNeeded(where);
 
-    executor.execute(DriverCommand.MOUSE_UP, ImmutableMap.<String, Object>of());
+    executor.execute(DriverCommand.MOUSE_UP, ImmutableMap.of());
   }
 
   public void mouseMove(Coordinates where) {

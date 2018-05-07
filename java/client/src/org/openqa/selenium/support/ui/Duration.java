@@ -15,7 +15,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-
 package org.openqa.selenium.support.ui;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -27,16 +26,22 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Represents an immutable duration of time.
+ *
+ * @deprecated use {@link java.time.Duration}
  */
+@Deprecated
 public class Duration {
 
   private final long time;
   private final TimeUnit unit;
 
   /**
+   * @deprecated use {@link java.time.Duration}
+   *
    * @param time The amount of time.
    * @param unit The unit of time.
    */
+  @Deprecated
   public Duration(long time, TimeUnit unit) {
     checkArgument(time >= 0, "Duration < 0: %d", time);
     checkNotNull(unit);
@@ -65,11 +70,14 @@ public class Duration {
   }
 
   /**
-   * Converts this durtation to the given unit of time.
+   * Converts this duration to the given unit of time.
+   *
+   * @deprecated use {@link java.time.Duration}
    *
    * @param unit The time unit to convert to.
-   * @return The value ofthis duration in the specified unit of time.
+   * @return The value of this duration in the specified unit of time.
    */
+  @Deprecated
   public long in(TimeUnit unit) {
     return unit.convert(time, this.unit);
   }

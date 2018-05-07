@@ -1,5 +1,5 @@
-﻿using System.Collections.Generic;
-using NMock2;
+using System.Collections.Generic;
+using Moq;
 using NUnit.Framework;
 using Is = NUnit.Framework.Is;
 
@@ -11,72 +11,67 @@ namespace OpenQA.Selenium.Support.PageObjects
         [Test]
         public void FindElementZeroBy()
         {
-            Mockery mock = new Mockery();
-            IAllDriver driver = mock.NewMock<IAllDriver>();
+            Mock<IAllDriver> driver = new Mock<IAllDriver>();
 
             ByChained by = new ByChained();
-            Assert.Throws<NoSuchElementException>(() => by.FindElement(driver));
+            Assert.Throws<NoSuchElementException>(() => by.FindElement(driver.Object));
         }
 
         [Test]
         public void FindElementsZeroBy()
         {
-            Mockery mock = new Mockery();
-            IAllDriver driver = mock.NewMock<IAllDriver>();
+            Mock<IAllDriver> driver = new Mock<IAllDriver>();
 
             ByChained by = new ByChained();
 
-            Assert.That(by.FindElements(driver), Is.EqualTo(new List<IWebElement>().AsReadOnly()));
+            Assert.That(by.FindElements(driver.Object), Is.EqualTo(new List<IWebElement>().AsReadOnly()));
         }
 
         [Test]
         public void FindElementOneBy()
         {
-            Mockery mock = new Mockery();
-            IAllDriver driver = mock.NewMock<IAllDriver>();
-            IAllElement elem1 = mock.NewMock<IAllElement>();
-            IAllElement elem2 = mock.NewMock<IAllElement>();
-            var elems12 = new List<IWebElement>() { elem1, elem2 }.AsReadOnly();
-            Expect.Once.On(driver).Method("FindElementsByName").With("cheese").Will(Return.Value(elems12));
+            Mock<IAllDriver> driver = new Mock<IAllDriver>();
+            Mock<IAllElement> elem1 = new Mock<IAllElement>();
+            Mock<IAllElement> elem2 = new Mock<IAllElement>();
+            var elems12 = new List<IWebElement>() { elem1.Object, elem2.Object }.AsReadOnly();
+            driver.Setup(_ => _.FindElementsByName(It.Is<string>(x => x == "cheese"))).Returns(elems12);
 
             ByChained by = new ByChained(By.Name("cheese"));
-            Assert.AreEqual(by.FindElement(driver), elem1);
-            mock.VerifyAllExpectationsHaveBeenMet();
+            Assert.AreEqual(by.FindElement(driver.Object), elem1.Object);
+            driver.Verify(_ => _.FindElementsByName("cheese"), Times.Once);
         }
 
         [Test]
         public void FindElementsOneBy()
         {
-            Mockery mock = new Mockery();
-            IAllDriver driver = mock.NewMock<IAllDriver>();
-            IAllElement elem1 = mock.NewMock<IAllElement>();
-            IAllElement elem2 = mock.NewMock<IAllElement>();
-            var elems12 = new List<IWebElement>() { elem1, elem2 }.AsReadOnly();
-            Expect.Once.On(driver).Method("FindElementsByName").With("cheese").Will(Return.Value(elems12));
+            Mock<IAllDriver> driver = new Mock<IAllDriver>();
+            Mock<IAllElement> elem1 = new Mock<IAllElement>();
+            Mock<IAllElement> elem2 = new Mock<IAllElement>();
+            var elems12 = new List<IWebElement>() { elem1.Object, elem2.Object }.AsReadOnly();
+            driver.Setup(_ => _.FindElementsByName(It.Is<string>(x => x == "cheese"))).Returns(elems12);
 
             ByChained by = new ByChained(By.Name("cheese"));
-            Assert.AreEqual(by.FindElements(driver), elems12);
-            mock.VerifyAllExpectationsHaveBeenMet();
+            Assert.AreEqual(by.FindElements(driver.Object), elems12);
+            driver.Verify(_ => _.FindElementsByName("cheese"), Times.Once);
         }
 
         [Test]
         public void FindElementOneByEmpty()
         {
-            Mockery mock = new Mockery();
-            IAllDriver driver = mock.NewMock<IAllDriver>();
+            Mock<IAllDriver> driver = new Mock<IAllDriver>();
             var elems = new List<IWebElement>().AsReadOnly();
 
-            Expect.Once.On(driver).Method("FindElementsByName").With("cheese").Will(Return.Value(elems));
+            driver.Setup(_ => _.FindElementsByName(It.Is<string>(x => x == "cheese"))).Returns(elems);
 
             ByChained by = new ByChained(By.Name("cheese"));
             try
             {
-                by.FindElement(driver);
+                by.FindElement(driver.Object);
                 Assert.Fail("Expected NoSuchElementException!");
             }
             catch (NoSuchElementException)
             {
-                mock.VerifyAllExpectationsHaveBeenMet();
+                driver.Verify(_ => _.FindElementsByName("cheese"), Times.Once);
                 Assert.Pass();
             }
         }
@@ -84,61 +79,60 @@ namespace OpenQA.Selenium.Support.PageObjects
         [Test]
         public void FindElementsOneByEmpty()
         {
-            Mockery mock = new Mockery();
-            IAllDriver driver = mock.NewMock<IAllDriver>();
+            Mock<IAllDriver> driver = new Mock<IAllDriver>();
             var elems = new List<IWebElement>().AsReadOnly();
 
-            Expect.Once.On(driver).Method("FindElementsByName").With("cheese").Will(Return.Value(elems));
+            driver.Setup(_ => _.FindElementsByName(It.Is<string>(x => x == "cheese"))).Returns(elems);
 
             ByChained by = new ByChained(By.Name("cheese"));
 
-            Assert.That(by.FindElements(driver), Is.EqualTo(elems));
+            Assert.That(by.FindElements(driver.Object), Is.EqualTo(elems));
         }
 
         [Test]
         public void FindElementTwoBy()
         {
-            Mockery mocks = new Mockery();
-            IAllDriver driver = mocks.NewMock<IAllDriver>();
+            Mock<IAllDriver> driver = new Mock<IAllDriver>();
 
-            IAllElement elem1 = mocks.NewMock<IAllElement>();
-            IAllElement elem2 = mocks.NewMock<IAllElement>();
-            IAllElement elem3 = mocks.NewMock<IAllElement>();
-            IAllElement elem4 = mocks.NewMock<IAllElement>();
-            IAllElement elem5 = mocks.NewMock<IAllElement>();
-            var elems12 = new List<IWebElement>() { elem1, elem2 }.AsReadOnly();
-            var elems34 = new List<IWebElement>() { elem3, elem4 }.AsReadOnly();
-            var elems5 = new List<IWebElement>() { elem5 }.AsReadOnly();
-            var elems345 = new List<IWebElement>() { elem3, elem4, elem5 }.AsReadOnly();
+            Mock<IAllElement> elem1 = new Mock<IAllElement>();
+            Mock<IAllElement> elem2 = new Mock<IAllElement>();
+            Mock<IAllElement> elem3 = new Mock<IAllElement>();
+            Mock<IAllElement> elem4 = new Mock<IAllElement>();
+            Mock<IAllElement> elem5 = new Mock<IAllElement>();
+            var elems12 = new List<IWebElement>() { elem1.Object, elem2.Object }.AsReadOnly();
+            var elems34 = new List<IWebElement>() { elem3.Object, elem4.Object }.AsReadOnly();
+            var elems5 = new List<IWebElement>() { elem5.Object }.AsReadOnly();
+            var elems345 = new List<IWebElement>() { elem3.Object, elem4.Object, elem5.Object }.AsReadOnly();
 
-            Expect.Once.On(driver).Method("FindElementsByName").With("cheese").Will(Return.Value(elems12));
-            Expect.Once.On(elem1).Method("FindElements").With(By.Name("photo")).Will(Return.Value(elems34));
-            Expect.Once.On(elem2).Method("FindElements").With(By.Name("photo")).Will(Return.Value(elems5));
+            driver.Setup(_ => _.FindElementsByName(It.Is<string>(x => x == "cheese"))).Returns(elems12);
+            elem1.Setup(_ => _.FindElements(It.Is<By>(x => x.Equals(By.Name("photo"))))).Returns(elems34);
+            elem2.Setup(_ => _.FindElements(It.Is<By>(x => x.Equals(By.Name("photo"))))).Returns(elems5);
 
             ByChained by = new ByChained(By.Name("cheese"), By.Name("photo"));
-            Assert.That(by.FindElement(driver), Is.EqualTo(elem3));
-            mocks.VerifyAllExpectationsHaveBeenMet();
+            Assert.That(by.FindElement(driver.Object), Is.EqualTo(elem3.Object));
+            driver.Verify(_ => _.FindElementsByName("cheese"), Times.Once);
+            elem1.Verify(_ => _.FindElements(By.Name("photo")), Times.Once);
+            elem2.Verify(_ => _.FindElements(By.Name("photo")), Times.Once);
         }
 
         [Test]
         public void FindElementTwoByEmptyParent()
         {
-            Mockery mocks = new Mockery();
-            IAllDriver driver = mocks.NewMock<IAllDriver>();
+            Mock<IAllDriver> driver = new Mock<IAllDriver>();
 
             var elems = new List<IWebElement>().AsReadOnly();
 
-            Expect.Once.On(driver).Method("FindElementsByName").With("cheese").Will(Return.Value(elems));
+            driver.Setup(_ => _.FindElementsByName(It.Is<string>(x => x == "cheese"))).Returns(elems);
 
             ByChained by = new ByChained(By.Name("cheese"), By.Name("photo"));
             try
             {
-                by.FindElement(driver);
+                by.FindElement(driver.Object);
                 Assert.Fail("Expected NoSuchElementException!");
             }
             catch (NoSuchElementException)
             {
-                mocks.VerifyAllExpectationsHaveBeenMet();
+                driver.Verify(_ => _.FindElementsByName("cheese"), Times.Once);
                 Assert.Pass();
             }
         }
@@ -146,65 +140,67 @@ namespace OpenQA.Selenium.Support.PageObjects
         [Test]
         public void FindElementsTwoByEmptyParent()
         {
-            Mockery mocks = new Mockery();
-            IAllDriver driver = mocks.NewMock<IAllDriver>();
+            Mock<IAllDriver> driver = new Mock<IAllDriver>();
 
             var elems = new List<IWebElement>().AsReadOnly();
 
-            Expect.Once.On(driver).Method("FindElementsByName").With("cheese").Will(Return.Value(elems));
+            driver.Setup(_ => _.FindElementsByName(It.Is<string>(x => x == "cheese"))).Returns(elems);
 
             ByChained by = new ByChained(By.Name("cheese"), By.Name("photo"));
 
-            Assert.That(by.FindElements(driver), Is.EqualTo(elems));
-            mocks.VerifyAllExpectationsHaveBeenMet();
+            Assert.That(by.FindElements(driver.Object), Is.EqualTo(elems));
+            driver.Verify(_ => _.FindElementsByName("cheese"), Times.Once);
         }
 
         [Test]
         public void FindElementTwoByEmptyChild()
         {
-            Mockery mocks = new Mockery();
-            IAllDriver driver = mocks.NewMock<IAllDriver>();
+            Mock<IAllDriver> driver = new Mock<IAllDriver>();
 
-            IAllElement elem1 = mocks.NewMock<IAllElement>();
-            IAllElement elem2 = mocks.NewMock<IAllElement>();
-            IAllElement elem5 = mocks.NewMock<IAllElement>();
+            Mock<IAllElement> elem1 = new Mock<IAllElement>();
+            Mock<IAllElement> elem2 = new Mock<IAllElement>();
+            Mock<IAllElement> elem5 = new Mock<IAllElement>();
+
             var elems = new List<IWebElement>().AsReadOnly();
-            var elems12 = new List<IWebElement>() { elem1, elem2 }.AsReadOnly();
-            var elems5 = new List<IWebElement>() { elem5 }.AsReadOnly();
+            var elems12 = new List<IWebElement>() { elem1.Object, elem2.Object }.AsReadOnly();
+            var elems5 = new List<IWebElement>() { elem5.Object }.AsReadOnly();
 
-            Expect.Once.On(driver).Method("FindElementsByName").With("cheese").Will(Return.Value(elems12));
-            Expect.Once.On(elem1).Method("FindElements").With(By.Name("photo")).Will(Return.Value(elems));
-            Expect.Once.On(elem2).Method("FindElements").With(By.Name("photo")).Will(Return.Value(elems5));
+            driver.Setup(_ => _.FindElementsByName(It.Is<string>(x => x == "cheese"))).Returns(elems12);
+            elem1.Setup(_ => _.FindElements(It.Is<By>(x => x.Equals(By.Name("photo"))))).Returns(elems);
+            elem2.Setup(_ => _.FindElements(It.Is<By>(x => x.Equals(By.Name("photo"))))).Returns(elems5);
 
             ByChained by = new ByChained(By.Name("cheese"), By.Name("photo"));
-            Assert.That(by.FindElement(driver), Is.EqualTo(elem5));
-            mocks.VerifyAllExpectationsHaveBeenMet();
+            Assert.That(by.FindElement(driver.Object), Is.EqualTo(elem5.Object));
+            driver.Verify(_ => _.FindElementsByName("cheese"), Times.Once);
+            elem1.Verify(_ => _.FindElements(By.Name("photo")), Times.Once);
+            elem2.Verify(_ => _.FindElements(By.Name("photo")), Times.Once);
         }
 
         [Test]
         public void FindElementsTwoByEmptyChild()
         {
-            Mockery mocks = new Mockery();
-            IAllDriver driver = mocks.NewMock<IAllDriver>();
+            Mock<IAllDriver> driver = new Mock<IAllDriver>();
 
-            IAllElement elem1 = mocks.NewMock<IAllElement>();
-            IAllElement elem2 = mocks.NewMock<IAllElement>();
-            IAllElement elem3 = mocks.NewMock<IAllElement>();
-            IAllElement elem4 = mocks.NewMock<IAllElement>();
-            IAllElement elem5 = mocks.NewMock<IAllElement>();
+            Mock<IAllElement> elem1 = new Mock<IAllElement>();
+            Mock<IAllElement> elem2 = new Mock<IAllElement>();
+            Mock<IAllElement> elem3 = new Mock<IAllElement>();
+            Mock<IAllElement> elem4 = new Mock<IAllElement>();
+            Mock<IAllElement> elem5 = new Mock<IAllElement>();
             var elems = new List<IWebElement>().AsReadOnly();
-            var elems12 = new List<IWebElement>() { elem1, elem2 }.AsReadOnly();
-            var elems34 = new List<IWebElement>() { elem3, elem4 }.AsReadOnly();
-            var elems5 = new List<IWebElement>() { elem5 }.AsReadOnly();
-            var elems345 = new List<IWebElement>() { elem3, elem4, elem5 }.AsReadOnly();
+            var elems12 = new List<IWebElement>() { elem1.Object, elem2.Object }.AsReadOnly();
+            var elems34 = new List<IWebElement>() { elem3.Object, elem4.Object }.AsReadOnly();
+            var elems5 = new List<IWebElement>() { elem5.Object }.AsReadOnly();
+            var elems345 = new List<IWebElement>() { elem3.Object, elem4.Object, elem5.Object }.AsReadOnly();
 
-            Expect.Once.On(driver).Method("FindElementsByName").With("cheese").Will(Return.Value(elems12));
-            Expect.Once.On(elem1).Method("FindElements").With(By.Name("photo")).Will(Return.Value(elems));
-            Expect.Once.On(elem2).Method("FindElements").With(By.Name("photo")).Will(Return.Value(elems5));
+            driver.Setup(_ => _.FindElementsByName(It.Is<string>(x => x == "cheese"))).Returns(elems12);
+            elem1.Setup(_ => _.FindElements(It.Is<By>(x => x.Equals(By.Name("photo"))))).Returns(elems);
+            elem2.Setup(_ => _.FindElements(It.Is<By>(x => x.Equals(By.Name("photo"))))).Returns(elems5);
 
             ByChained by = new ByChained(By.Name("cheese"), By.Name("photo"));
-            Assert.That(by.FindElements(driver), Is.EqualTo(new[] { elem5 }));
-            mocks.VerifyAllExpectationsHaveBeenMet();
+            Assert.That(by.FindElements(driver.Object), Is.EqualTo(new[] { elem5.Object }));
+            driver.Verify(_ => _.FindElementsByName("cheese"), Times.Once);
+            elem1.Verify(_ => _.FindElements(By.Name("photo")), Times.Once);
+            elem2.Verify(_ => _.FindElements(By.Name("photo")), Times.Once);
         }
 
         [Test]

@@ -17,14 +17,15 @@
 
 import base64
 import hashlib
-import pkgutil
 import os
+import pkgutil
+import warnings
 import zipfile
 
-from .command import Command
 from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.utils import keys_to_typing
+from .command import Command
 
 # Python 3 imports
 try:
@@ -37,8 +38,10 @@ try:
 except ImportError:  # 3+
     from io import BytesIO as IOStream
 
-getAttribute_js = pkgutil.get_data(__package__, 'getAttribute.js').decode('utf8')
-isDisplayed_js = pkgutil.get_data(__package__, 'isDisplayed.js').decode('utf8')
+# not relying on __package__ here as it can be `None` in some situations (see #4558)
+_pkg = '.'.join(__name__.split('.')[:-1])
+getAttribute_js = pkgutil.get_data(_pkg, 'getAttribute.js').decode('utf8')
+isDisplayed_js = pkgutil.get_data(_pkg, 'isDisplayed.js').decode('utf8')
 
 
 class WebElement(object):
@@ -100,7 +103,6 @@ class WebElement(object):
 
         Example::
 
-            # Check if the "active" CSS class is applied to an element.
             text_length = target_element.get_property("text_length")
         """
         try:
@@ -160,15 +162,32 @@ class WebElement(object):
         """Finds element within this element's children by ID.
 
         :Args:
-            - id\_ - ID of child element to locate.
+         - id\_ - ID of child element to locate.
+
+        :Returns:
+         - WebElement - the element if it was found
+
+        :Raises:
+         - NoSuchElementException - if the element wasn't found
+
+        :Usage:
+            foo_element = element.find_element_by_id('foo')
         """
         return self.find_element(by=By.ID, value=id_)
 
     def find_elements_by_id(self, id_):
         """Finds a list of elements within this element's children by ID.
+        Will return a list of webelements if found, or an empty list if not.
 
         :Args:
-            - id\_ - Id of child element to find.
+         - id\_ - Id of child element to find.
+
+        :Returns:
+         - list of WebElement - a list with elements if any was found.  An
+           empty list if not
+
+        :Usage:
+            elements = element.find_elements_by_id('foo')
         """
         return self.find_elements(by=By.ID, value=id_)
 
@@ -176,7 +195,16 @@ class WebElement(object):
         """Finds element within this element's children by name.
 
         :Args:
-            - name - name property of the element to find.
+         - name - name property of the element to find.
+
+        :Returns:
+         - WebElement - the element if it was found
+
+        :Raises:
+         - NoSuchElementException - if the element wasn't found
+
+        :Usage:
+            element = element.find_element_by_name('foo')
         """
         return self.find_element(by=By.NAME, value=name)
 
@@ -184,7 +212,14 @@ class WebElement(object):
         """Finds a list of elements within this element's children by name.
 
         :Args:
-            - name - name property to search for.
+         - name - name property to search for.
+
+        :Returns:
+         - list of webelement - a list with elements if any was found.  an
+           empty list if not
+
+        :Usage:
+            elements = element.find_elements_by_name('foo')
         """
         return self.find_elements(by=By.NAME, value=name)
 
@@ -192,7 +227,16 @@ class WebElement(object):
         """Finds element within this element's children by visible link text.
 
         :Args:
-            - link_text - Link text string to search for.
+         - link_text - Link text string to search for.
+
+        :Returns:
+         - WebElement - the element if it was found
+
+        :Raises:
+         - NoSuchElementException - if the element wasn't found
+
+        :Usage:
+            element = element.find_element_by_link_text('Sign In')
         """
         return self.find_element(by=By.LINK_TEXT, value=link_text)
 
@@ -200,7 +244,14 @@ class WebElement(object):
         """Finds a list of elements within this element's children by visible link text.
 
         :Args:
-            - link_text - Link text string to search for.
+         - link_text - Link text string to search for.
+
+        :Returns:
+         - list of webelement - a list with elements if any was found.  an
+           empty list if not
+
+        :Usage:
+            elements = element.find_elements_by_link_text('Sign In')
         """
         return self.find_elements(by=By.LINK_TEXT, value=link_text)
 
@@ -208,7 +259,16 @@ class WebElement(object):
         """Finds element within this element's children by partially visible link text.
 
         :Args:
-            - link_text - Link text string to search for.
+         - link_text: The text of the element to partially match on.
+
+        :Returns:
+         - WebElement - the element if it was found
+
+        :Raises:
+         - NoSuchElementException - if the element wasn't found
+
+        :Usage:
+            element = element.find_element_by_partial_link_text('Sign')
         """
         return self.find_element(by=By.PARTIAL_LINK_TEXT, value=link_text)
 
@@ -216,7 +276,14 @@ class WebElement(object):
         """Finds a list of elements within this element's children by link text.
 
         :Args:
-            - link_text - Link text string to search for.
+         - link_text: The text of the element to partial match on.
+
+        :Returns:
+         - list of webelement - a list with elements if any was found.  an
+           empty list if not
+
+        :Usage:
+            elements = element.find_elements_by_partial_link_text('Sign')
         """
         return self.find_elements(by=By.PARTIAL_LINK_TEXT, value=link_text)
 
@@ -224,7 +291,16 @@ class WebElement(object):
         """Finds element within this element's children by tag name.
 
         :Args:
-            - name - name of html tag (eg: h1, a, span)
+         - name - name of html tag (eg: h1, a, span)
+
+        :Returns:
+         - WebElement - the element if it was found
+
+        :Raises:
+         - NoSuchElementException - if the element wasn't found
+
+        :Usage:
+            element = element.find_element_by_tag_name('h1')
         """
         return self.find_element(by=By.TAG_NAME, value=name)
 
@@ -232,7 +308,14 @@ class WebElement(object):
         """Finds a list of elements within this element's children by tag name.
 
         :Args:
-            - name - name of html tag (eg: h1, a, span)
+         - name - name of html tag (eg: h1, a, span)
+
+        :Returns:
+         - list of WebElement - a list with elements if any was found.  An
+           empty list if not
+
+        :Usage:
+            elements = element.find_elements_by_tag_name('h1')
         """
         return self.find_elements(by=By.TAG_NAME, value=name)
 
@@ -240,7 +323,7 @@ class WebElement(object):
         """Finds element by xpath.
 
         :Args:
-            xpath - xpath of element to locate.  "//input[@class='myelement']"
+         - xpath - xpath of element to locate.  "//input[@class='myelement']"
 
         Note: The base path will be relative to this element's location.
 
@@ -248,14 +331,22 @@ class WebElement(object):
 
         ::
 
-            myelement.find_elements_by_xpath(".//a")
+            myelement.find_element_by_xpath(".//a")
 
         However, this will select the first link on the page.
 
         ::
 
-            myelement.find_elements_by_xpath("//a")
+            myelement.find_element_by_xpath("//a")
 
+        :Returns:
+         - WebElement - the element if it was found
+
+        :Raises:
+         - NoSuchElementException - if the element wasn't found
+
+        :Usage:
+            element = element.find_element_by_xpath('//div/td[1]')
         """
         return self.find_element(by=By.XPATH, value=xpath)
 
@@ -263,7 +354,7 @@ class WebElement(object):
         """Finds elements within the element by xpath.
 
         :Args:
-            - xpath - xpath locator string.
+         - xpath - xpath locator string.
 
         Note: The base path will be relative to this element's location.
 
@@ -279,6 +370,13 @@ class WebElement(object):
 
             myelement.find_elements_by_xpath("//a")
 
+        :Returns:
+         - list of WebElement - a list with elements if any was found.  An
+           empty list if not
+
+        :Usage:
+            elements = element.find_elements_by_xpath("//div[contains(@class, 'foo')]")
+
         """
         return self.find_elements(by=By.XPATH, value=xpath)
 
@@ -286,7 +384,16 @@ class WebElement(object):
         """Finds element within this element's children by class name.
 
         :Args:
-            - name - class name to search for.
+         - name: The class name of the element to find.
+
+        :Returns:
+         - WebElement - the element if it was found
+
+        :Raises:
+         - NoSuchElementException - if the element wasn't found
+
+        :Usage:
+            element = element.find_element_by_class_name('foo')
         """
         return self.find_element(by=By.CLASS_NAME, value=name)
 
@@ -294,7 +401,14 @@ class WebElement(object):
         """Finds a list of elements within this element's children by class name.
 
         :Args:
-            - name - class name to search for.
+         - name: The class name of the elements to find.
+
+        :Returns:
+         - list of WebElement - a list with elements if any was found.  An
+           empty list if not
+
+        :Usage:
+            elements = element.find_elements_by_class_name('foo')
         """
         return self.find_elements(by=By.CLASS_NAME, value=name)
 
@@ -302,7 +416,16 @@ class WebElement(object):
         """Finds element within this element's children by CSS selector.
 
         :Args:
-            - css_selector - CSS selctor string, ex: 'a.nav#home'
+         - css_selector - CSS selector string, ex: 'a.nav#home'
+
+        :Returns:
+         - WebElement - the element if it was found
+
+        :Raises:
+         - NoSuchElementException - if the element wasn't found
+
+        :Usage:
+            element = element.find_element_by_css_selector('#foo')
         """
         return self.find_element(by=By.CSS_SELECTOR, value=css_selector)
 
@@ -310,7 +433,14 @@ class WebElement(object):
         """Finds a list of elements within this element's children by CSS selector.
 
         :Args:
-            - css_selector - CSS selctor string, ex: 'a.nav#home'
+         - css_selector - CSS selector string, ex: 'a.nav#home'
+
+        :Returns:
+         - list of WebElement - a list with elements if any was found.  An
+           empty list if not
+
+        :Usage:
+            elements = element.find_elements_by_css_selector('.foo')
         """
         return self.find_elements(by=By.CSS_SELECTOR, value=css_selector)
 
@@ -344,7 +474,9 @@ class WebElement(object):
             if local_file is not None:
                 value = self._upload(local_file)
 
-        self._execute(Command.SEND_KEYS_TO_ELEMENT, {'value': keys_to_typing(value)})
+        self._execute(Command.SEND_KEYS_TO_ELEMENT,
+                      {'text': "".join(keys_to_typing(value)),
+                       'value': keys_to_typing(value)})
 
     # RenderedWebElement Items
     def is_displayed(self):
@@ -368,7 +500,7 @@ class WebElement(object):
 
         """
         if self._w3c:
-            old_loc = self._execute(Command.EXECUTE_SCRIPT, {
+            old_loc = self._execute(Command.W3C_EXECUTE_SCRIPT, {
                 'script': "arguments[0].scrollIntoView(true); return arguments[0].getBoundingClientRect()",
                 'args': [self]})['value']
             return {"x": round(old_loc['x']),
@@ -381,7 +513,7 @@ class WebElement(object):
         """The size of the element."""
         size = {}
         if self._w3c:
-            size = self._execute(Command.GET_ELEMENT_RECT)
+            size = self._execute(Command.GET_ELEMENT_RECT)['value']
         else:
             size = self._execute(Command.GET_ELEMENT_SIZE)['value']
         new_size = {"height": size["height"],
@@ -397,7 +529,7 @@ class WebElement(object):
     def location(self):
         """The location of the element in the renderable canvas."""
         if self._w3c:
-            old_loc = self._execute(Command.GET_ELEMENT_RECT)
+            old_loc = self._execute(Command.GET_ELEMENT_RECT)['value']
         else:
             old_loc = self._execute(Command.GET_ELEMENT_LOCATION)['value']
         new_loc = {"x": round(old_loc['x']),
@@ -407,10 +539,7 @@ class WebElement(object):
     @property
     def rect(self):
         """A dictionary with the size and location of the element."""
-        if self._w3c:
-            return self._execute(Command.GET_ELEMENT_RECT)
-        else:
-            return self._execute(Command.GET_ELEMENT_RECT)['value']
+        return self._execute(Command.GET_ELEMENT_RECT)['value']
 
     @property
     def screenshot_as_base64(self):
@@ -434,15 +563,20 @@ class WebElement(object):
 
     def screenshot(self, filename):
         """
-        Gets the screenshot of the current element. Returns False if there is
-           any IOError, else returns True. Use full paths in your filename.
+        Saves a screenshot of the current element to a PNG image file. Returns
+           False if there is any IOError, else returns True. Use full paths in
+           your filename.
 
         :Args:
-         - filename: The full path you wish to save your screenshot to.
+         - filename: The full path you wish to save your screenshot to. This
+           should end with a `.png` extension.
 
         :Usage:
             element.screenshot('/Screenshots/foo.png')
         """
+        if not filename.lower().endswith('.png'):
+            warnings.warn("name used for saved screenshot does not match file "
+                          "type. It should end with a `.png` extension", UserWarning)
         png = self.screenshot_as_png
         try:
             with open(filename, 'wb') as f:
@@ -494,6 +628,14 @@ class WebElement(object):
         return self._parent.execute(command, params)
 
     def find_element(self, by=By.ID, value=None):
+        """
+        'Private' method used by the find_element_by_* methods.
+
+        :Usage:
+            Use the corresponding find_element_by_* instead of this.
+
+        :rtype: WebElement
+        """
         if self._w3c:
             if by == By.ID:
                 by = By.CSS_SELECTOR
@@ -511,6 +653,14 @@ class WebElement(object):
                              {"using": by, "value": value})['value']
 
     def find_elements(self, by=By.ID, value=None):
+        """
+        'Private' method used by the find_elements_by_* methods.
+
+        :Usage:
+            Use the corresponding find_elements_by_* instead of this.
+
+        :rtype: list of WebElement
+        """
         if self._w3c:
             if by == By.ID:
                 by = By.CSS_SELECTOR

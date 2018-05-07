@@ -22,7 +22,9 @@ import static org.openqa.selenium.remote.DriverCommand.ACTIONS;
 import static org.openqa.selenium.remote.DriverCommand.CLEAR_ACTIONS_STATE;
 import static org.openqa.selenium.remote.DriverCommand.CLEAR_LOCAL_STORAGE;
 import static org.openqa.selenium.remote.DriverCommand.CLEAR_SESSION_STORAGE;
+import static org.openqa.selenium.remote.DriverCommand.CLICK;
 import static org.openqa.selenium.remote.DriverCommand.DISMISS_ALERT;
+import static org.openqa.selenium.remote.DriverCommand.DOUBLE_CLICK;
 import static org.openqa.selenium.remote.DriverCommand.EXECUTE_ASYNC_SCRIPT;
 import static org.openqa.selenium.remote.DriverCommand.EXECUTE_SCRIPT;
 import static org.openqa.selenium.remote.DriverCommand.FIND_CHILD_ELEMENT;
@@ -49,6 +51,9 @@ import static org.openqa.selenium.remote.DriverCommand.GET_SESSION_STORAGE_SIZE;
 import static org.openqa.selenium.remote.DriverCommand.GET_WINDOW_HANDLES;
 import static org.openqa.selenium.remote.DriverCommand.IS_ELEMENT_DISPLAYED;
 import static org.openqa.selenium.remote.DriverCommand.MAXIMIZE_CURRENT_WINDOW;
+import static org.openqa.selenium.remote.DriverCommand.MOUSE_DOWN;
+import static org.openqa.selenium.remote.DriverCommand.MOUSE_UP;
+import static org.openqa.selenium.remote.DriverCommand.MOVE_TO;
 import static org.openqa.selenium.remote.DriverCommand.REMOVE_LOCAL_STORAGE_ITEM;
 import static org.openqa.selenium.remote.DriverCommand.REMOVE_SESSION_STORAGE_ITEM;
 import static org.openqa.selenium.remote.DriverCommand.SEND_KEYS_TO_ACTIVE_ELEMENT;
@@ -61,23 +66,30 @@ import static org.openqa.selenium.remote.DriverCommand.SET_SESSION_STORAGE_ITEM;
 import static org.openqa.selenium.remote.DriverCommand.SET_TIMEOUT;
 import static org.openqa.selenium.remote.DriverCommand.SUBMIT_ELEMENT;
 
-import com.google.common.base.Charsets;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
 import com.google.common.io.Resources;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonPrimitive;
 
 import org.openqa.selenium.WebDriverException;
+import org.openqa.selenium.interactions.Interaction;
+import org.openqa.selenium.interactions.KeyInput;
+import org.openqa.selenium.interactions.PointerInput;
+import org.openqa.selenium.interactions.Sequence;
+import org.openqa.selenium.remote.RemoteWebElement;
 import org.openqa.selenium.remote.internal.WebElementToJsonConverter;
 
 import java.io.IOException;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
 
 /**
  * A command codec that adheres to the W3C's WebDriver wire protocol.
@@ -85,6 +97,9 @@ import java.util.stream.Stream;
  * @see <a href="https://w3.org/tr/webdriver">W3C WebDriver spec</a>
  */
 public class W3CHttpCommandCodec extends AbstractHttpCommandCodec {
+
+  private final PointerInput mouse = new PointerInput(PointerInput.Kind.MOUSE, "mouse");
+  private final KeyInput keyboard = new KeyInput("keyboard");
 
   public W3CHttpCommandCodec() {
     alias(GET_ELEMENT_ATTRIBUTE, EXECUTE_SCRIPT);
@@ -112,10 +127,10 @@ public class W3CHttpCommandCodec extends AbstractHttpCommandCodec {
     alias(GET_SESSION_STORAGE_SIZE, EXECUTE_SCRIPT);
 
     defineCommand(MAXIMIZE_CURRENT_WINDOW, post("/session/:sessionId/window/maximize"));
-    alias(GET_CURRENT_WINDOW_POSITION, EXECUTE_SCRIPT);
-    alias(SET_CURRENT_WINDOW_POSITION, EXECUTE_SCRIPT);
-    defineCommand(GET_CURRENT_WINDOW_SIZE, get("/session/:sessionId/window/size"));
-    defineCommand(SET_CURRENT_WINDOW_SIZE, post("/session/:sessionId/window/size"));
+    defineCommand(GET_CURRENT_WINDOW_SIZE, get("/session/:sessionId/window/rect"));
+    defineCommand(SET_CURRENT_WINDOW_SIZE, post("/session/:sessionId/window/rect"));
+    alias(GET_CURRENT_WINDOW_POSITION, GET_CURRENT_WINDOW_SIZE);
+    alias(SET_CURRENT_WINDOW_POSITION, SET_CURRENT_WINDOW_SIZE);
     defineCommand(GET_CURRENT_WINDOW_HANDLE, get("/session/:sessionId/window"));
     defineCommand(GET_WINDOW_HANDLES, get("/session/:sessionId/window/handles"));
 
@@ -128,11 +143,38 @@ public class W3CHttpCommandCodec extends AbstractHttpCommandCodec {
 
     defineCommand(ACTIONS, post("/session/:sessionId/actions"));
     defineCommand(CLEAR_ACTIONS_STATE, delete("/session/:sessionId/actions"));
+
+    // Emulate the old Actions API since everyone still likes to call these things.
+    alias(CLICK, ACTIONS);
+    alias(DOUBLE_CLICK, ACTIONS);
+    alias(MOUSE_DOWN, ACTIONS);
+    alias(MOUSE_UP, ACTIONS);
+    alias(MOVE_TO, ACTIONS);
   }
 
   @Override
   protected Map<String, ?> amendParameters(String name, Map<String, ?> parameters) {
     switch (name) {
+      case CLICK:
+        return ImmutableMap.<String, Object>builder()
+            .put("actions", ImmutableList.of(
+                new Sequence(mouse, 0)
+                    .addAction(mouse.createPointerDown(PointerInput.MouseButton.LEFT.asArg()))
+                    .addAction(mouse.createPointerUp(PointerInput.MouseButton.LEFT.asArg()))
+                    .toJson()))
+            .build();
+
+      case DOUBLE_CLICK:
+        return ImmutableMap.<String, Object>builder()
+            .put("actions", ImmutableList.of(
+                new Sequence(mouse, 0)
+                    .addAction(mouse.createPointerDown(PointerInput.MouseButton.LEFT.asArg()))
+                    .addAction(mouse.createPointerUp(PointerInput.MouseButton.LEFT.asArg()))
+                    .addAction(mouse.createPointerDown(PointerInput.MouseButton.LEFT.asArg()))
+                    .addAction(mouse.createPointerUp(PointerInput.MouseButton.LEFT.asArg()))
+                    .toJson()))
+            .build();
+
       case FIND_CHILD_ELEMENT:
       case FIND_CHILD_ELEMENTS:
       case FIND_ELEMENT:
@@ -140,8 +182,7 @@ public class W3CHttpCommandCodec extends AbstractHttpCommandCodec {
         String using = (String) parameters.get("using");
         String value = (String) parameters.get("value");
 
-        Map<String, Object> toReturn = new HashMap<>();
-        toReturn.putAll(parameters);
+        Map<String, Object> toReturn = new HashMap<>(parameters);
 
         switch (using) {
           case "class name":
@@ -187,7 +228,7 @@ public class W3CHttpCommandCodec extends AbstractHttpCommandCodec {
 
       case GET_ELEMENT_LOCATION_ONCE_SCROLLED_INTO_VIEW:
         return toScript(
-          "return arguments[0].getBoundingClientRect()",
+          "var e = arguments[0]; e.scrollIntoView({behavior: 'instant', block: 'end', inline: 'nearest'}); var rect = e.getBoundingClientRect(); return {'x': rect.left, 'y': rect.top};",
           asElement(parameters.get("id")));
 
       case GET_PAGE_SOURCE:
@@ -203,13 +244,15 @@ public class W3CHttpCommandCodec extends AbstractHttpCommandCodec {
         return toScript("return Object.keys(localStorage)");
 
       case SET_LOCAL_STORAGE_ITEM:
-        return toScript("localStorage.setItem('arguments[0]', 'arguments[1]')");
+        return toScript("localStorage.setItem(arguments[0], arguments[1])",
+                        parameters.get("key"), parameters.get("value"));
 
       case REMOVE_LOCAL_STORAGE_ITEM:
-        return toScript("localStorage.removeItem('arguments[0]')");
+        return toScript("var item = localStorage.getItem(arguments[0]); localStorage.removeItem(arguments[0]); return item",
+                        parameters.get("key"));
 
       case GET_LOCAL_STORAGE_ITEM:
-        return toScript("return localStorage.getItem('arguments[0]')");
+        return toScript("return localStorage.getItem(arguments[0])", parameters.get("key"));
 
       case GET_LOCAL_STORAGE_SIZE:
         return toScript("return localStorage.length");
@@ -221,48 +264,79 @@ public class W3CHttpCommandCodec extends AbstractHttpCommandCodec {
         return toScript("return Object.keys(sessionStorage)");
 
       case SET_SESSION_STORAGE_ITEM:
-        return toScript("sessionStorage.setItem('arguments[0]', 'arguments[1]')");
+        return toScript("sessionStorage.setItem(arguments[0], arguments[1])",
+                        parameters.get("key"), parameters.get("value"));
 
       case REMOVE_SESSION_STORAGE_ITEM:
-        return toScript("sessionStorage.removeItem('arguments[0]')");
+        return toScript("var item = sessionStorage.getItem(arguments[0]); sessionStorage.removeItem(arguments[0]); return item",
+                        parameters.get("key"));
 
       case GET_SESSION_STORAGE_ITEM:
-        return toScript("return sessionStorage.getItem('arguments[0]')");
+        return toScript("return sessionStorage.getItem(arguments[0])", parameters.get("key"));
 
       case GET_SESSION_STORAGE_SIZE:
         return toScript("return sessionStorage.length");
 
-      case GET_CURRENT_WINDOW_POSITION:
-        return toScript("return {x: window.screenX, y: window.screenY}");
-
       case IS_ELEMENT_DISPLAYED:
         return executeAtom("isDisplayed.js", asElement(parameters.get("id")));
 
+      case MOUSE_DOWN:
+        Interaction mouseDown = mouse.createPointerDown(PointerInput.MouseButton.LEFT.asArg());
+        return ImmutableMap.<String, Object>builder()
+            .put("actions", ImmutableList.of(new Sequence(mouse, 0).addAction(mouseDown).toJson()))
+            .build();
+
+      case MOUSE_UP:
+        Interaction mouseUp = mouse.createPointerUp(PointerInput.MouseButton.LEFT.asArg());
+        return ImmutableMap.<String, Object>builder()
+            .put("actions", ImmutableList.of(new Sequence(mouse, 0).addAction(mouseUp).toJson()))
+            .build();
+
+      case MOVE_TO:
+        PointerInput.Origin origin = PointerInput.Origin.pointer();
+        if (parameters.containsKey("element")) {
+          RemoteWebElement element = new RemoteWebElement();
+          element.setId((String) parameters.get("element"));
+          origin = PointerInput.Origin.fromElement(element);
+        }
+        int x = parameters.containsKey("xoffset") ? ((Number) parameters.get("xoffset")).intValue() : 0;
+        int y = parameters.containsKey("yoffset") ? ((Number) parameters.get("yoffset")).intValue() : 0;
+
+        Interaction mouseMove = mouse.createPointerMove(Duration.ofMillis(200), origin, x, y);
+        return ImmutableMap.<String, Object>builder()
+            .put("actions", ImmutableList.of(new Sequence(mouse, 0).addAction(mouseMove).toJson()))
+            .build();
+
       case SEND_KEYS_TO_ACTIVE_ELEMENT:
       case SEND_KEYS_TO_ELEMENT:
+        // When converted from JSON, this is a list, not an array
+        Object rawValue = parameters.get("value");
+        Stream<CharSequence> source;
+        if (rawValue instanceof Collection) {
+          //noinspection unchecked
+          source = ((Collection<CharSequence>) rawValue).stream();
+        } else {
+          source = Stream.of((CharSequence[]) rawValue);
+        }
+
+        String text = source
+            .flatMap(Stream::of)
+            .collect(Collectors.joining());
         return ImmutableMap.<String, Object>builder()
-          .putAll(
-            parameters.entrySet().stream()
-              .filter(e -> !"value".equals(e.getKey()))
-              .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)))
-          .put(
-            "value",
-            stringToUtf8Array(
-              Stream.of((CharSequence[]) parameters.get("value"))
-                .flatMap(Stream::of)
-                .collect(Collectors.joining())))
-          .build();
+            .putAll(
+                parameters.entrySet().stream()
+                    .filter(e -> !"text".equals(e.getKey()))
+                    .filter(e -> !"value".equals(e.getKey()))
+                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)))
+            .put("text", text)
+            .put("value", stringToUtf8Array(text))
+            .build();
 
       case SET_ALERT_VALUE:
         return ImmutableMap.<String, Object>builder()
+          .put("text", parameters.get("text"))
           .put("value", stringToUtf8Array((String) parameters.get("text")))
           .build();
-
-      case SET_CURRENT_WINDOW_POSITION:
-        return toScript(
-          "window.screenX = arguments[0]; window.screenY = arguments[1]",
-          parameters.get("x"),
-          parameters.get("y"));
 
       case SET_TIMEOUT:
         String timeoutType = (String) parameters.get("type");
@@ -291,7 +365,7 @@ public class W3CHttpCommandCodec extends AbstractHttpCommandCodec {
           "if (!form.ownerDocument) { throw Error('Unable to find owning document'); }\n" +
           "var e = form.ownerDocument.createEvent('Event');\n" +
           "e.initEvent('submit', true, true);\n" +
-          "if (form.dispatchEvent(e)) { form.submit() }\n",
+          "if (form.dispatchEvent(e)) { HTMLFormElement.prototype.submit.call(form) }\n",
           asElement(parameters.get("id")));
 
       default:
@@ -299,12 +373,12 @@ public class W3CHttpCommandCodec extends AbstractHttpCommandCodec {
     }
   }
 
-  private JsonArray stringToUtf8Array(String toConvert) {
-    JsonArray toReturn = new JsonArray();
+  private List<String> stringToUtf8Array(String toConvert) {
+    List<String> toReturn = new ArrayList<>();
     int offset = 0;
     while (offset < toConvert.length()) {
       int next = toConvert.codePointAt(offset);
-      toReturn.add(new JsonPrimitive(new StringBuilder().appendCodePoint(next).toString()));
+      toReturn.add(new StringBuilder().appendCodePoint(next).toString());
       offset += Character.charCount(next);
     }
     return toReturn;
@@ -315,7 +389,7 @@ public class W3CHttpCommandCodec extends AbstractHttpCommandCodec {
       String scriptName = "/org/openqa/selenium/remote/" + atomFileName;
       URL url = getClass().getResource(scriptName);
 
-      String rawFunction = Resources.toString(url, Charsets.UTF_8);
+      String rawFunction = Resources.toString(url, StandardCharsets.UTF_8);
       String script = String.format(
         "return (%s).apply(null, arguments);",
         rawFunction);
@@ -329,12 +403,12 @@ public class W3CHttpCommandCodec extends AbstractHttpCommandCodec {
     // Escape the quote marks
     script = script.replaceAll("\"", "\\\"");
 
-    Iterable<Object> convertedArgs = Iterables.transform(
-      Lists.newArrayList(args), new WebElementToJsonConverter());
+    List<Object> convertedArgs = Stream.of(args).map(new WebElementToJsonConverter()).collect(
+        Collectors.toList());
 
     return ImmutableMap.of(
       "script", script,
-      "args", Lists.newArrayList(convertedArgs));
+      "args", convertedArgs);
   }
 
   private Map<String, String> asElement(Object id) {
@@ -342,7 +416,7 @@ public class W3CHttpCommandCodec extends AbstractHttpCommandCodec {
   }
 
   private String cssEscape(String using) {
-    using = using.replaceAll("(['\"\\\\#.:;,!?+<>=~*^$|%&@`{}\\-\\/\\[\\]\\(\\)])", "\\\\$1");
+    using = using.replaceAll("([\\s'\"\\\\#.:;,!?+<>=~*^$|%&@`{}\\-\\/\\[\\]\\(\\)])", "\\\\$1");
     if (using.length() > 0 && Character.isDigit(using.charAt(0))) {
       using = "\\" + Integer.toString(30 + Integer.parseInt(using.substring(0,1))) + " " + using.substring(1);
     }

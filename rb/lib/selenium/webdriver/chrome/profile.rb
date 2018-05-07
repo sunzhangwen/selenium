@@ -1,5 +1,3 @@
-# encoding: utf-8
-#
 # Licensed to the Software Freedom Conservancy (SFC) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -80,7 +78,7 @@ module Selenium
           extensions.concat(@encoded_extensions)
 
           opts = {directory: @directory || layout_on_disk}
-          opts[:extensions] = extensions if extensions
+          opts[:extensions] = extensions if extensions.any?
           opts
         end
 

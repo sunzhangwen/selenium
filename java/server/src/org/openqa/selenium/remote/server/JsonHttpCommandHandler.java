@@ -18,7 +18,6 @@
 package org.openqa.selenium.remote.server;
 
 import static org.openqa.selenium.remote.DriverCommand.*;
-import static org.openqa.selenium.remote.http.HttpMethod.POST;
 
 import org.openqa.selenium.UnsupportedCommandException;
 import org.openqa.selenium.remote.Command;
@@ -33,7 +32,6 @@ import org.openqa.selenium.remote.http.JsonHttpCommandCodec;
 import org.openqa.selenium.remote.http.JsonHttpResponseCodec;
 import org.openqa.selenium.remote.http.W3CHttpCommandCodec;
 import org.openqa.selenium.remote.server.handler.AcceptAlert;
-import org.openqa.selenium.remote.server.handler.AddConfig;
 import org.openqa.selenium.remote.server.handler.AddCookie;
 import org.openqa.selenium.remote.server.handler.CaptureScreenshot;
 import org.openqa.selenium.remote.server.handler.ChangeUrl;
@@ -90,11 +88,9 @@ import org.openqa.selenium.remote.server.handler.ImeGetAvailableEngines;
 import org.openqa.selenium.remote.server.handler.ImeIsActivated;
 import org.openqa.selenium.remote.server.handler.ImplicitlyWait;
 import org.openqa.selenium.remote.server.handler.MaximizeWindow;
-import org.openqa.selenium.remote.server.handler.NewSession;
 import org.openqa.selenium.remote.server.handler.RefreshPage;
 import org.openqa.selenium.remote.server.handler.Rotate;
 import org.openqa.selenium.remote.server.handler.SendKeys;
-import org.openqa.selenium.remote.server.handler.SetAlertCredentials;
 import org.openqa.selenium.remote.server.handler.SetAlertText;
 import org.openqa.selenium.remote.server.handler.SetScriptTimeout;
 import org.openqa.selenium.remote.server.handler.SetWindowPosition;
@@ -105,6 +101,7 @@ import org.openqa.selenium.remote.server.handler.SwitchToFrame;
 import org.openqa.selenium.remote.server.handler.SwitchToParentFrame;
 import org.openqa.selenium.remote.server.handler.SwitchToWindow;
 import org.openqa.selenium.remote.server.handler.UploadFile;
+import org.openqa.selenium.remote.server.handler.W3CActions;
 import org.openqa.selenium.remote.server.handler.html5.ClearLocalStorage;
 import org.openqa.selenium.remote.server.handler.html5.ClearSessionStorage;
 import org.openqa.selenium.remote.server.handler.html5.GetAppCacheStatus;
@@ -141,6 +138,7 @@ import org.openqa.selenium.remote.server.log.PerSessionLogHandler;
 import org.openqa.selenium.remote.server.rest.RestishHandler;
 import org.openqa.selenium.remote.server.rest.ResultConfig;
 
+import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -148,8 +146,6 @@ import java.util.Set;
 import java.util.logging.Logger;
 
 public class JsonHttpCommandHandler {
-
-  private static final String ADD_CONFIG_COMMAND_NAME = "-selenium-add-config";
 
   private final DriverSessions sessions;
   private final Logger log;
@@ -169,12 +165,13 @@ public class JsonHttpCommandHandler {
   }
 
   public void addNewMapping(
-      String commandName, Class<? extends RestishHandler<?>> implementationClass) {
+      String commandName,
+      Class<? extends RestishHandler<?>> implementationClass) {
     ResultConfig config = new ResultConfig(commandName, implementationClass, sessions, log);
     configs.put(commandName, config);
   }
 
-  public HttpResponse handleRequest(HttpRequest request) {
+  public void handleRequest(HttpRequest request, HttpResponse resp) throws IOException {
     LoggingManager.perSessionLogHandler().clearThreadTempLogs();
     log.fine(String.format("Handling: %s %s", request.getMethod(), request.getUri()));
 
@@ -205,7 +202,7 @@ public class JsonHttpCommandHandler {
       handler.attachToCurrentThread(new SessionId(response.getSessionId()));
     }
     try {
-      return responseCodec.encode(response);
+      responseCodec.encode(() -> resp, response);
     } finally {
       handler.detachFromCurrentThread();
     }
@@ -227,15 +224,8 @@ public class JsonHttpCommandHandler {
   }
 
   private void setUpMappings() {
-    for (CommandCodec<HttpRequest> codec : commandCodecs) {
-      codec.defineCommand(ADD_CONFIG_COMMAND_NAME, POST, "/config/drivers");
-    }
-
-    addNewMapping(ADD_CONFIG_COMMAND_NAME, AddConfig.class);
-
     addNewMapping(STATUS, Status.class);
     addNewMapping(GET_ALL_SESSIONS, GetAllSessions.class);
-    addNewMapping(NEW_SESSION, NewSession.class);
     addNewMapping(GET_CAPABILITIES, GetSessionCapabilities.class);
     addNewMapping(QUIT, DeleteSession.class);
 
@@ -246,7 +236,6 @@ public class JsonHttpCommandHandler {
     addNewMapping(ACCEPT_ALERT, AcceptAlert.class);
     addNewMapping(GET_ALERT_TEXT, GetAlertText.class);
     addNewMapping(SET_ALERT_VALUE, SetAlertText.class);
-    addNewMapping(SET_ALERT_CREDENTIALS, SetAlertCredentials.class);
 
     addNewMapping(GET, ChangeUrl.class);
     addNewMapping(GET_CURRENT_URL, GetCurrentUrl.class);
@@ -347,6 +336,8 @@ public class JsonHttpCommandHandler {
     addNewMapping(IME_IS_ACTIVATED, ImeIsActivated.class);
     addNewMapping(IME_DEACTIVATE, ImeDeactivate.class);
     addNewMapping(IME_ACTIVATE_ENGINE, ImeActivateEngine.class);
+
+    addNewMapping(ACTIONS, W3CActions.class);
 
     // Advanced Touch API
     addNewMapping(TOUCH_SINGLE_TAP, SingleTapOnElement.class);

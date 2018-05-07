@@ -19,6 +19,7 @@ package org.openqa.selenium.support.events;
 
 import org.openqa.selenium.Alert;
 import org.openqa.selenium.By;
+import org.openqa.selenium.OutputType;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 
@@ -196,10 +197,45 @@ public interface WebDriverEventListener {
   void afterScript(String script, WebDriver driver);
 
   /**
+   * This action will be performed each time before  {@link org.openqa.selenium.WebDriver.TargetLocator#window(java.lang.String)}
+   *
+   * @param driver WebDriver
+   */
+  void beforeSwitchToWindow(String windowName, WebDriver driver);
+
+  /**
+   * This action will be performed each time after  {@link org.openqa.selenium.WebDriver.TargetLocator#window(java.lang.String)}
+   *
+   * @param driver WebDriver
+   */
+  void afterSwitchToWindow(String windowName, WebDriver driver);
+
+  /**
    * Called whenever an exception would be thrown.
    *
    * @param driver WebDriver
    * @param throwable the exception that will be thrown
    */
   void onException(Throwable throwable, WebDriver driver);
+  
+  /**
+   * Called before {@link org.openqa.selenium.TakesScreenshot#getScreenshotAs(OutputType)}
+   * allows the implementation to determine which type of output will be generated
+   *
+   * @param <X> Return type for getScreenshotAs.
+   * @param target target type, @see OutputType
+   */
+  <X> void beforeGetScreenshotAs(OutputType<X> target);
+  
+  /**
+   * Called after {@link org.openqa.selenium.TakesScreenshot#getScreenshotAs(OutputType)}
+   * allows the implementation to determine which type of output was generated
+   * and to access the output itself
+   *
+   * @param <X> Return type for getScreenshotAs.
+   * @param target target type, @see OutputType
+   * @param screenshot screenshot output of the specified type
+   */
+  <X> void afterGetScreenshotAs(OutputType<X> target, X screenshot);
+
 }

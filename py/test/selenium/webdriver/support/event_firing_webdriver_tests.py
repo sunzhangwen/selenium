@@ -25,6 +25,7 @@ import pytest
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.events import EventFiringWebDriver, AbstractEventListener
+from selenium.webdriver.support.ui import WebDriverWait
 
 
 @pytest.fixture
@@ -59,6 +60,7 @@ def test_should_fire_navigation_events(driver, log, pages):
     ef_driver = EventFiringWebDriver(driver, EventListener())
     ef_driver.get(pages.url("formPage.html"))
     ef_driver.find_element(by=By.ID, value="imageButton").submit()
+    WebDriverWait(ef_driver, 5).until(lambda d: d.title == "We Arrive Here")
     assert ef_driver.title == "We Arrive Here"
 
     ef_driver.back()
@@ -193,3 +195,24 @@ def test_should_be_able_to_access_wrapped_instance_from_event_calls(driver):
     ef_driver = EventFiringWebDriver(driver, EventListener())
     wrapped_driver = ef_driver.wrapped_driver
     assert driver is wrapped_driver
+
+
+def test_using_kwargs(driver, pages):
+    ef_driver = EventFiringWebDriver(driver, AbstractEventListener())
+    ef_driver.get(pages.url("javascriptPage.html"))
+    ef_driver.get_cookie(name="cookie_name")
+    element = ef_driver.find_element_by_id("plainButton")
+    element.get_attribute(name="id")
+
+
+def test_missing_attributes_raise_error(driver, pages):
+    ef_driver = EventFiringWebDriver(driver, AbstractEventListener())
+
+    with pytest.raises(AttributeError):
+        ef_driver.attribute_should_not_exist
+
+    ef_driver.get(pages.url("readOnlyPage.html"))
+    element = ef_driver.find_element_by_id("writableTextInput")
+
+    with pytest.raises(AttributeError):
+        element.attribute_should_not_exist

@@ -15,13 +15,13 @@
 // specific language governing permissions and limitations
 // under the License.
 
-
 package org.openqa.selenium.remote;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 
 import org.openqa.selenium.Beta;
+import org.openqa.selenium.ElementClickInterceptedException;
 import org.openqa.selenium.ElementNotInteractableException;
 import org.openqa.selenium.ElementNotSelectableException;
 import org.openqa.selenium.ElementNotVisibleException;
@@ -99,6 +99,7 @@ public class ErrorCodes {
   public static final int INVALID_ARGUMENT = 61;
   public static final int NO_SUCH_COOKIE = 62;
   public static final int UNABLE_TO_CAPTURE_SCREEN = 63;
+  public static final int ELEMENT_CLICK_INTERCEPTED = 64;
 
   // The following error codes are derived straight from HTTP return codes.
   public static final int METHOD_NOT_ALLOWED = 405;
@@ -213,6 +214,7 @@ public class ErrorCodes {
   // status to send.
   private static final ImmutableSet<KnownError> KNOWN_ERRORS = ImmutableSet.<KnownError>builder()
     .add(new KnownError(ASYNC_SCRIPT_TIMEOUT, "script timeout", 408, ScriptTimeoutException.class, true, true))
+    .add(new KnownError(ELEMENT_CLICK_INTERCEPTED, "element click intercepted", 400, ElementClickInterceptedException.class, true, true))
     .add(new KnownError(ELEMENT_NOT_SELECTABLE, "element not selectable", 400, ElementNotSelectableException.class, true, true))
     .add(new KnownError(ELEMENT_NOT_INTERACTABLE, "element not interactable", 400, ElementNotInteractableException.class, true, true))
     .add(new KnownError(ELEMENT_NOT_VISIBLE, "element not visible", 400, ElementNotVisibleException.class, true, true))
@@ -229,14 +231,14 @@ public class ErrorCodes {
     .add(new KnownError(METHOD_NOT_ALLOWED, "unknown method", 405, UnsupportedCommandException.class, false, true))
     .add(new KnownError(METHOD_NOT_ALLOWED, "unsupported operation", 500, UnsupportedCommandException.class, false, true))
     .add(new KnownError(MOVE_TARGET_OUT_OF_BOUNDS, "move target out of bounds", 500, MoveTargetOutOfBoundsException.class, true, true))
-    .add(new KnownError(NO_ALERT_PRESENT, "no such alert", 400, NoAlertPresentException.class, true, true))
+    .add(new KnownError(NO_ALERT_PRESENT, "no such alert", 404, NoAlertPresentException.class, true, true))
     .add(new KnownError(NO_SUCH_COOKIE, "no such cookie", 404, NoSuchCookieException.class, true, true))
     .add(new KnownError(NO_SUCH_ELEMENT, "no such element", 404, NoSuchElementException.class, true, true))
-    .add(new KnownError(NO_SUCH_FRAME, "no such frame", 400, NoSuchFrameException.class, true, true))
+    .add(new KnownError(NO_SUCH_FRAME, "no such frame", 404, NoSuchFrameException.class, true, true))
     .add(new KnownError(NO_SUCH_SESSION, "invalid session id", 404, NoSuchSessionException.class, true, true))
-    .add(new KnownError(NO_SUCH_WINDOW, "no such window", 400, NoSuchWindowException.class, true, true))
+    .add(new KnownError(NO_SUCH_WINDOW, "no such window", 404, NoSuchWindowException.class, true, true))
     .add(new KnownError(SESSION_NOT_CREATED, "session not created", 500, SessionNotCreatedException.class ,true, true))
-    .add(new KnownError(STALE_ELEMENT_REFERENCE, "stale element reference", 400, StaleElementReferenceException.class, true, true))
+    .add(new KnownError(STALE_ELEMENT_REFERENCE, "stale element reference", 404, StaleElementReferenceException.class, true, true))
     .add(new KnownError(TIMEOUT, "timeout", 408, TimeoutException.class, true, true))
     .add(new KnownError(XPATH_LOOKUP_ERROR, "invalid selector", 400, InvalidSelectorException.class, false, false))
     .add(new KnownError(UNABLE_TO_CAPTURE_SCREEN, "unable to capture screen", 500, ScreenshotException.class, true, true))

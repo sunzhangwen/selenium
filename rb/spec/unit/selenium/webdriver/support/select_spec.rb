@@ -1,5 +1,3 @@
-# encoding: utf-8
-#
 # Licensed to the Software Freedom Conservancy (SFC) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -170,7 +168,7 @@ module Selenium
         end
 
         it 'can not deselect all when select does not support multiple selections' do
-          expect(select).to receive(:attribute).with(:multiple).and_return nil
+          expect(select).to receive(:attribute).with(:multiple)
 
           expect do
             Select.new(select).deselect_all

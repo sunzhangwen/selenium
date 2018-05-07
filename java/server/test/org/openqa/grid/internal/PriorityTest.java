@@ -24,6 +24,8 @@ import org.junit.Before;
 import org.junit.Test;
 import org.openqa.grid.internal.listeners.Prioritizer;
 import org.openqa.grid.internal.mock.GridHelper;
+import org.openqa.grid.internal.utils.configuration.GridHubConfiguration;
+import org.openqa.grid.web.Hub;
 import org.openqa.grid.web.servlet.handler.RequestHandler;
 import org.openqa.selenium.remote.CapabilityType;
 
@@ -35,7 +37,7 @@ import java.util.Map;
 
 public class PriorityTest {
 
-  private Registry registry;
+  private GridRegistry registry;
 
   // priority rule : the request with the highest priority goes first.
   private static Prioritizer highestNumberHasPriority = new Prioritizer() {
@@ -64,8 +66,8 @@ public class PriorityTest {
    */
   @Before
   public void setup() throws Exception {
-    registry = Registry.newInstance();
-    registry.getConfiguration().prioritizer = highestNumberHasPriority;
+    registry = DefaultGridRegistry.newInstance(new Hub(new GridHubConfiguration()));
+    registry.getHub().getConfiguration().prioritizer = highestNumberHasPriority;
     ff.put(CapabilityType.APPLICATION_NAME, "FF");
     p1 = RemoteProxyFactory.getNewBasicRemoteProxy(ff, "http://machine1:4444", registry);
     registry.add(p1);
@@ -123,7 +125,7 @@ public class PriorityTest {
 
     // free the grid : the queue is consumed, and the test with the highest
     // priority should be processed.
-    registry.terminateSynchronousFOR_TEST_ONLY(session);
+    ((DefaultGridRegistry) registry).terminateSynchronousFOR_TEST_ONLY(session);
 
   }
 

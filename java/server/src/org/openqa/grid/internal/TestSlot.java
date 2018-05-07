@@ -23,10 +23,12 @@ import org.openqa.grid.common.exception.GridException;
 import org.openqa.grid.internal.listeners.TestSessionListener;
 import org.openqa.grid.internal.utils.CapabilityMatcher;
 import org.openqa.grid.internal.utils.configuration.GridHubConfiguration;
+import org.openqa.grid.internal.utils.configuration.GridNodeConfiguration;
 
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.security.InvalidParameterException;
+import java.time.Clock;
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.locks.Lock;
@@ -42,7 +44,7 @@ import java.util.logging.Logger;
  * thread safe. If 2 threads are trying to execute the before / after session, only 1 will be
  * executed.The other one will be discarded.
  *
- * This class sees multiple threads but is currently sort-of protected by the lock in Registry.
+ * This class sees multiple threads but is currently sort-of protected by the lock in GridRegistry.
  * Unfortunately the CleanUpThread also messes around in here, so it should be thread safe on its
  * own.
  *
@@ -59,7 +61,7 @@ public class TestSlot {
   private final Lock lock = new ReentrantLock();
 
   private volatile TestSession currentSession;
-  volatile boolean beingReleased = false;
+  private volatile boolean beingReleased = false;
   private boolean showWarning = false;
   private long lastSessionStart = -1;
 
@@ -70,8 +72,11 @@ public class TestSlot {
    * @param path the protocol path this test slot uses
    * @param capabilities capabilities of this test slot
    */
-  public TestSlot(RemoteProxy proxy, SeleniumProtocol protocol, String path,
-                  Map<String, Object> capabilities) {
+  public TestSlot(
+      RemoteProxy proxy,
+      SeleniumProtocol protocol,
+      String path,
+      Map<String, Object> capabilities) {
     this.proxy = proxy;
     this.protocol = protocol;
     this.path = path;
@@ -81,7 +86,7 @@ public class TestSlot {
       throw new InvalidParameterException("the proxy needs to have a valid "
           + "capabilityMatcher to support have some test slots attached to it");
     }
-    matcher = proxy.getCapabilityHelper();
+    this.matcher = proxy.getCapabilityHelper();
     this.capabilities = capabilities;
   }
 
@@ -128,7 +133,9 @@ public class TestSlot {
       }
       if (matches(desiredCapabilities)) {
         log.info("Trying to create a new session on test slot " + this.capabilities);
-        TestSession session = new TestSession(this, desiredCapabilities, new DefaultTimeSource());
+        desiredCapabilities.put(GridNodeConfiguration.CONFIG_UUID_CAPABILITY,
+                                capabilities.get(GridNodeConfiguration.CONFIG_UUID_CAPABILITY));
+        TestSession session = new TestSession(this, desiredCapabilities, Clock.systemUTC());
         currentSession = session;
         lastSessionStart = System.currentTimeMillis();
         return session;
@@ -188,7 +195,7 @@ public class TestSlot {
    * @return true if that's the first thread trying to release this test slot, false otherwise.
    * @see TestSlot#finishReleaseProcess()
    */
-  boolean startReleaseProcess() {
+  public boolean startReleaseProcess() {
     if (currentSession == null) {
       return false;
     }
@@ -208,7 +215,7 @@ public class TestSlot {
   /**
    * releasing all the resources. The slot can now be reused.
    */
-  void finishReleaseProcess() {
+  public void finishReleaseProcess() {
     try {
       lock.lock();
       doFinishRelease();
@@ -228,14 +235,14 @@ public class TestSlot {
   /**
    * @return the test session internal key
    */
-  String getInternalKey() {
+  public String getInternalKey() {
     return currentSession == null ? null : currentSession.getInternalKey();
   }
 
   /**
    * @return invokes after session {@link TestSessionListener} events on this test slot
    */
-  boolean performAfterSessionEvent() {
+  public boolean performAfterSessionEvent() {
     // run the pre-release listener
     try {
       if (proxy instanceof TestSessionListener) {

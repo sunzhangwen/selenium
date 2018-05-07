@@ -19,10 +19,6 @@ package org.openqa.grid.internal.utils.configuration;
 
 import com.google.gson.annotations.Expose;
 
-import com.beust.jcommander.Parameter;
-
-import org.openqa.grid.internal.utils.configuration.converters.CustomConverter;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -30,7 +26,7 @@ import java.util.Map;
 
 import javax.servlet.Servlet;
 
-class GridConfiguration extends StandaloneConfiguration {
+public class GridConfiguration extends StandaloneConfiguration {
   /*
    * config parameters which serialize and deserialize to/from json
    */
@@ -39,10 +35,6 @@ class GridConfiguration extends StandaloneConfiguration {
    * Clean up cycle for remote proxies. Default determined by configuration type.
    */
   @Expose
-  @Parameter(
-    names = "-cleanUpCycle",
-    description = "<Integer> in ms : specifies how often the hub will poll running proxies for timed-out (i.e. hung) threads. Must also specify \"timeout\" option"
-  )
   // initially defaults to null from type
   public Integer cleanUpCycle;
 
@@ -50,32 +42,12 @@ class GridConfiguration extends StandaloneConfiguration {
    * Custom key/value pairs for the hub registry. Default empty.
    */
   @Expose
-  @Parameter(
-    names = "-custom",
-    description = "<String> : comma separated key=value pairs for custom grid extensions. NOT RECOMMENDED -- may be deprecated in a future revision. Example: -custom myParamA=Value1,myParamB=Value2",
-    converter = CustomConverter.class
-  )
   public Map<String, String> custom = new HashMap<>();
-
-  /**
-   * Hostname or IP to use. Defaults to {@code null}. Automatically determined when {@code null}.
-   */
-  @Expose
-  @Parameter(
-    names = "-host",
-    description =  "<String> IP or hostname : usually determined automatically. Most commonly useful in exotic network configurations (e.g. network with VPN)"
-  )
-  // initially defaults to null from type
-  public String host;
 
   /**
    * Max "browser" sessions a node can handle. Default determined by configuration type.
    */
   @Expose
-  @Parameter(
-    names = "-maxSession",
-    description = "<Integer> max number of tests that can run at the same time on the node, irrespective of the browser used"
-  )
   // initially defaults to null from type
   public Integer maxSession;
 
@@ -83,20 +55,12 @@ class GridConfiguration extends StandaloneConfiguration {
    * Extra servlets to initialize/use on the hub or node. Default empty.
    */
   @Expose
-  @Parameter(
-    names = {"-servlet", "-servlets"},
-    description = "<String> : list of extra servlets the grid (hub or node) will make available. Specify multiple on the command line: -servlet tld.company.ServletA -servlet tld.company.ServletB. The servlet must exist in the path: /grid/admin/ServletA /grid/admin/ServletB"
-  )
   public List<String> servlets = new ArrayList<>();
 
   /**
    * Default servlets to exclude on the hub or node. Default empty.
    */
   @Expose
-  @Parameter(
-    names = {"-withoutServlet", "-withoutServlets"},
-    description = "<String> : list of default (hub or node) servlets to disable. Advanced use cases only. Not all default servlets can be disabled. Specify multiple on the command line: -withoutServlet tld.company.ServletA -withoutServlet tld.company.ServletB"
-  )
   public List<String> withoutServlets = new ArrayList<>();
 
   /**
@@ -116,7 +80,6 @@ class GridConfiguration extends StandaloneConfiguration {
     }
     super.merge(other);
 
-    // don't merge 'host'
     if (isMergeAble(other.cleanUpCycle, cleanUpCycle)) {
       cleanUpCycle = other.cleanUpCycle;
     }
@@ -154,7 +117,6 @@ class GridConfiguration extends StandaloneConfiguration {
     sb.append(super.toString(format));
     sb.append(toString(format, "cleanUpCycle", cleanUpCycle));
     sb.append(toString(format, "custom", custom));
-    sb.append(toString(format, "host", host));
     sb.append(toString(format, "maxSession", maxSession));
     sb.append(toString(format, "servlets", servlets));
     sb.append(toString(format, "withoutServlets", withoutServlets));

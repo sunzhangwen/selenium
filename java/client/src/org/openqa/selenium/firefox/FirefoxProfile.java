@@ -17,11 +17,7 @@
 
 package org.openqa.selenium.firefox;
 
-import static org.openqa.selenium.firefox.FirefoxDriver.ACCEPT_UNTRUSTED_CERTIFICATES;
-import static org.openqa.selenium.firefox.FirefoxDriver.ASSUME_UNTRUSTED_ISSUER;
-
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.Maps;
 import com.google.common.io.Resources;
 
 import org.openqa.selenium.Beta;
@@ -32,6 +28,7 @@ import org.openqa.selenium.firefox.internal.FileExtension;
 import org.openqa.selenium.io.FileHandler;
 import org.openqa.selenium.io.TemporaryFilesystem;
 import org.openqa.selenium.io.Zip;
+import org.openqa.selenium.json.Json;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -40,6 +37,7 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.StringReader;
 import java.net.URL;
+import java.util.HashMap;
 import java.util.Map;
 
 
@@ -51,7 +49,7 @@ public class FirefoxProfile {
 
   private Preferences additionalPrefs;
 
-  private Map<String, Extension> extensions = Maps.newHashMap();
+  private Map<String, Extension> extensions = new HashMap<>();
   private boolean loadNoFocusLib;
   private boolean acceptUntrustedCerts;
   private boolean untrustedCertIssuer;
@@ -90,14 +88,12 @@ public class FirefoxProfile {
     if (prefsInModel.exists()) {
       StringReader reader = new StringReader("{\"frozen\": {}, \"mutable\": {}}");
       Preferences existingPrefs = new Preferences(reader, prefsInModel);
-      acceptUntrustedCerts = getBooleanPreference(existingPrefs, ACCEPT_UNTRUSTED_CERTS_PREF,
-                                                  ACCEPT_UNTRUSTED_CERTIFICATES);
-      untrustedCertIssuer = getBooleanPreference(existingPrefs, ASSUME_UNTRUSTED_ISSUER_PREF,
-                                                 ASSUME_UNTRUSTED_ISSUER);
+      acceptUntrustedCerts = getBooleanPreference(existingPrefs, ACCEPT_UNTRUSTED_CERTS_PREF, true);
+      untrustedCertIssuer = getBooleanPreference(existingPrefs, ASSUME_UNTRUSTED_ISSUER_PREF, true);
       existingPrefs.addTo(additionalPrefs);
     } else {
-      acceptUntrustedCerts = ACCEPT_UNTRUSTED_CERTIFICATES;
-      untrustedCertIssuer = ASSUME_UNTRUSTED_ISSUER;
+      acceptUntrustedCerts = true;
+      untrustedCertIssuer = true;
     }
 
     // This is not entirely correct but this is not stored in the profile
@@ -308,21 +304,6 @@ public class FirefoxProfile {
     }
   }
 
-  @Deprecated
-  /**
-   * @deprecated "Native" events are not supported in FirefoxDriver anymore
-   */
-  public boolean areNativeEventsEnabled() {
-    return false;
-  }
-
-  @Deprecated
-  /**
-   * @deprecated "Native" events are not supported in FirefoxDriver anymore
-   */
-  public void setEnableNativeEvents(boolean enableNativeEvents) {
-  }
-
   /**
    * Returns whether the no focus library should be loaded for Firefox profiles launched on Linux,
    * even if native events are disabled.
@@ -376,11 +357,26 @@ public class FirefoxProfile {
   }
 
   public String toJson() throws IOException {
-    return Zip.zip(layoutOnDisk());
+    File file = layoutOnDisk();
+    try {
+      return Zip.zip(file);
+    } finally {
+      clean(file);
+    }
   }
 
   public static FirefoxProfile fromJson(String json) throws IOException {
-    return new FirefoxProfile(Zip.unzipToTempDir(json, "webdriver", "duplicated"));
+    // We used to just pass in the entire string without quotes. If we see that, we're good.
+    // Otherwise, parse the json.
+
+    if (json.trim().startsWith("\"")) {
+      json = new Json().toType(json, String.class);
+    }
+
+    return new FirefoxProfile(Zip.unzipToTempDir(
+        json,
+        "webdriver",
+        "duplicated"));
   }
 
   protected void cleanTemporaryModel() {

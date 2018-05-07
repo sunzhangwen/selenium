@@ -17,11 +17,6 @@
 
 package org.openqa.grid.e2e;
 
-/**
- * Created with IntelliJ IDEA. User: alexei Date: 05.05.13 Time: 15:29 To change this template use
- * File | Settings | File Templates.
- */
-
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 import org.openqa.grid.e2e.misc.ConfigInheritanceTest;
@@ -35,7 +30,7 @@ import org.openqa.grid.e2e.misc.Issue1586;
 import org.openqa.grid.e2e.misc.WebDriverPriorityDemo;
 import org.openqa.grid.e2e.node.BrowserTimeOutTest;
 import org.openqa.grid.e2e.node.CrashWhenStartingBrowserTest;
-import org.openqa.grid.e2e.node.DefaultProxyFindsFirefoxLocationsTest;
+import org.openqa.grid.e2e.node.DefaultProxyInjectsConfigurationUuidTest;
 import org.openqa.grid.e2e.node.DefaultProxyIsUnregisteredIfDownForTooLongTest;
 import org.openqa.grid.e2e.node.NodeGoingDownAndUpTest;
 import org.openqa.grid.e2e.node.NodeRecoveryTest;
@@ -48,7 +43,7 @@ import org.openqa.grid.e2e.utils.ExtraServletUtilTest;
     BrowserTimeOutTest.class,
     ConfigInheritanceTest.class,
     CrashWhenStartingBrowserTest.class,
-    DefaultProxyFindsFirefoxLocationsTest.class,
+    DefaultProxyInjectsConfigurationUuidTest.class,
     DefaultProxyIsUnregisteredIfDownForTooLongTest.class,
     ExtraServletUtilTest.class,
     Grid1HeartbeatTest.class,

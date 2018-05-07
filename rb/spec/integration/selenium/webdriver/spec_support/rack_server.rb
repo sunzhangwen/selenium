@@ -1,5 +1,3 @@
-# encoding: utf-8
-#
 # Licensed to the Software Freedom Conservancy (SFC) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -48,7 +46,7 @@ module Selenium
         end
 
         def run
-          handler.run @app, Host: @host, Port: @port, AccessLog: []
+          handler.run @app, Host: @host, Port: @port, AccessLog: [], Logger: WEBrick::Log.new(nil, 0)
         end
 
         def where_is(file)
@@ -123,28 +121,9 @@ module Selenium
               body = req['upload'][:tempfile].read
 
               [200, {'Content-Type' => 'text/html'}, [body]]
-            when '/basicAuth'
-              if authorized?(env)
-                status = 200
-                header = {'Content-Type' => 'text/html'}
-                body = '<h1>authorized</h1>'
-              else
-                status = 401
-                header = {'WWW-Authenticate' => 'Basic realm="basic-auth-test"'}
-                body = 'Login please'
-              end
-
-              [status, header, [body]]
             else
               @static.call env
             end
-          end
-
-          private
-
-          def authorized?(env)
-            auth = Rack::Auth::Basic::Request.new(env)
-            auth.provided? && auth.basic? && auth.credentials && auth.credentials == BASIC_AUTH_CREDENTIALS
           end
         end
       end # RackServer
@@ -152,6 +131,6 @@ module Selenium
   end # WebDriver
 end # Selenium
 
-if __FILE__ == $PROGRAM_NAME
+if $PROGRAM_NAME == __FILE__
   Selenium::WebDriver::SpecSupport::RackServer.new(ARGV[0], ARGV[1]).run
 end

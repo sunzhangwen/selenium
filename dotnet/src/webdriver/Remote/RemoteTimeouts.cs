@@ -1,4 +1,4 @@
-﻿// <copyright file="RemoteTimeouts.cs" company="WebDriver Committers">
+// <copyright file="RemoteTimeouts.cs" company="WebDriver Committers">
 // Licensed to the Software Freedom Conservancy (SFC) under one
 // or more contributor license agreements. See the NOTICE file
 // distributed with this work for additional information
@@ -27,6 +27,15 @@ namespace OpenQA.Selenium.Remote
     /// </summary>
     internal class RemoteTimeouts : ITimeouts
     {
+        private const string ImplicitTimeoutName = "implicit";
+        private const string AsyncScriptTimeoutName = "script";
+        private const string PageLoadTimeoutName = "pageLoad";
+        private const string LegacyPageLoadTimeoutName = "page load";
+
+        private readonly TimeSpan DefaultImplicitWaitTimeout = TimeSpan.FromSeconds(0);
+        private readonly TimeSpan DefaultAsyncScriptTimeout = TimeSpan.FromSeconds(30);
+        private readonly TimeSpan DefaultPageLoadTimeout = TimeSpan.FromSeconds(300);
+
         private RemoteWebDriver driver;
 
         /// <summary>
@@ -57,8 +66,8 @@ namespace OpenQA.Selenium.Remote
         /// </remarks>
         public TimeSpan ImplicitWait
         {
-            get { return this.ExecuteGetTimeout("implicit"); }
-            set { this.ExecuteSetTimeout("implicit", value); }
+            get { return this.ExecuteGetTimeout(ImplicitTimeoutName); }
+            set { this.ExecuteSetTimeout(ImplicitTimeoutName, value); }
         }
 
         /// <summary>
@@ -69,8 +78,8 @@ namespace OpenQA.Selenium.Remote
         /// </summary>
         public TimeSpan AsynchronousJavaScript
         {
-            get { return this.ExecuteGetTimeout("script"); }
-            set { this.ExecuteSetTimeout("script", value); }
+            get { return this.ExecuteGetTimeout(AsyncScriptTimeoutName); }
+            set { this.ExecuteSetTimeout(AsyncScriptTimeoutName, value); }
         }
 
         /// <summary>
@@ -80,59 +89,27 @@ namespace OpenQA.Selenium.Remote
         /// </summary>
         public TimeSpan PageLoad
         {
-            get { return this.ExecuteGetTimeout("page load"); }
-            set { this.ExecuteSetTimeout("page load", value); }
-        }
+            get
+            {
+                string timeoutName = LegacyPageLoadTimeoutName;
+                if (this.driver.IsSpecificationCompliant)
+                {
+                    timeoutName = PageLoadTimeoutName;
+                }
 
-        /// <summary>
-        /// Specifies the amount of time the driver should wait when searching for an
-        /// element if it is not immediately present.
-        /// </summary>
-        /// <param name="timeToWait">A <see cref="TimeSpan"/> structure defining the amount of time to wait.</param>
-        /// <returns>A self reference</returns>
-        /// <remarks>
-        /// When searching for a single element, the driver should poll the page
-        /// until the element has been found, or this timeout expires before throwing
-        /// a <see cref="NoSuchElementException"/>. When searching for multiple elements,
-        /// the driver should poll the page until at least one element has been found
-        /// or this timeout has expired.
-        /// <para>
-        /// Increasing the implicit wait timeout should be used judiciously as it
-        /// will have an adverse effect on test run time, especially when used with
-        /// slower location strategies like XPath.
-        /// </para>
-        /// </remarks>
-        [Obsolete("This method will be removed in a future version. Please set the ImplicitWait property instead.")]
-        public ITimeouts ImplicitlyWait(TimeSpan timeToWait)
-        {
-            this.ExecuteSetTimeout("implicit", timeToWait);
-            return this;
-        }
+                return this.ExecuteGetTimeout(timeoutName);
+            }
 
-        /// <summary>
-        /// Specifies the amount of time the driver should wait when executing JavaScript asynchronously.
-        /// </summary>
-        /// <param name="timeToWait">A <see cref="TimeSpan"/> structure defining the amount of time to wait.
-        /// Setting this parameter to <see cref="TimeSpan.MinValue"/> will allow the script to run indefinitely.</param>
-        /// <returns>A self reference</returns>
-        [Obsolete("This method will be removed in a future version. Please set the AsynchronousJavaScript property instead.")]
-        public ITimeouts SetScriptTimeout(TimeSpan timeToWait)
-        {
-            this.ExecuteSetTimeout("script", timeToWait);
-            return this;
-        }
+            set
+            {
+                string timeoutName = LegacyPageLoadTimeoutName;
+                if (this.driver.IsSpecificationCompliant)
+                {
+                    timeoutName = PageLoadTimeoutName;
+                }
 
-        /// <summary>
-        /// Specifies the amount of time the driver should wait for a page to load when setting the <see cref="IWebDriver.Url"/> property.
-        /// </summary>
-        /// <param name="timeToWait">A <see cref="TimeSpan"/> structure defining the amount of time to wait.
-        /// Setting this parameter to <see cref="TimeSpan.MinValue"/> will allow the page to load indefinitely.</param>
-        /// <returns>A self reference</returns>
-        [Obsolete("This method will be removed in a future version. Please set the PageLoad property instead.")]
-        public ITimeouts SetPageLoadTimeout(TimeSpan timeToWait)
-        {
-            this.ExecuteSetTimeout("page load", timeToWait);
-            return this;
+                this.ExecuteSetTimeout(timeoutName, value);
+            }
         }
 
         private TimeSpan ExecuteGetTimeout(string timeoutType)
@@ -159,7 +136,25 @@ namespace OpenQA.Selenium.Remote
             double milliseconds = timeToWait.TotalMilliseconds;
             if (timeToWait == TimeSpan.MinValue)
             {
-                milliseconds = -1;
+                if (this.driver.IsSpecificationCompliant)
+                {
+                    if (timeoutType == ImplicitTimeoutName)
+                    {
+                        milliseconds = DefaultImplicitWaitTimeout.TotalMilliseconds;
+                    }
+                    else if (timeoutType == AsyncScriptTimeoutName)
+                    {
+                        milliseconds = DefaultAsyncScriptTimeout.TotalMilliseconds;
+                    }
+                    else
+                    {
+                        milliseconds = DefaultPageLoadTimeout.TotalMilliseconds;
+                    }
+                }
+                else
+                {
+                    milliseconds = -1;
+                }
             }
 
             Dictionary<string, object> parameters = new Dictionary<string, object>();

@@ -17,7 +17,6 @@
 
 package org.openqa.selenium.remote.http;
 
-import static com.google.common.base.Charsets.UTF_8;
 import static com.google.common.base.Strings.nullToEmpty;
 import static com.google.common.net.HttpHeaders.CACHE_CONTROL;
 import static com.google.common.net.HttpHeaders.CONTENT_LENGTH;
@@ -26,15 +25,16 @@ import static com.google.common.net.HttpHeaders.EXPIRES;
 import static com.google.common.net.MediaType.JSON_UTF_8;
 import static java.net.HttpURLConnection.HTTP_INTERNAL_ERROR;
 import static java.net.HttpURLConnection.HTTP_OK;
+import static java.nio.charset.StandardCharsets.UTF_8;
 
-import org.openqa.selenium.remote.BeanToJsonConverter;
+import org.openqa.selenium.json.Json;
+import org.openqa.selenium.json.JsonException;
 import org.openqa.selenium.remote.ErrorCodes;
-import org.openqa.selenium.remote.JsonException;
-import org.openqa.selenium.remote.JsonToBeanConverter;
 import org.openqa.selenium.remote.Response;
 import org.openqa.selenium.remote.ResponseCodec;
 
 import java.util.Optional;
+import java.util.function.Supplier;
 
 /**
  * A response codec usable as a base for both the JSON and W3C wire protocols.
@@ -43,8 +43,7 @@ import java.util.Optional;
  */
 public abstract class AbstractHttpResponseCodec implements ResponseCodec<HttpResponse> {
   private final ErrorCodes errorCodes = new ErrorCodes();
-  private final BeanToJsonConverter beanToJsonConverter = new BeanToJsonConverter();
-  private final JsonToBeanConverter jsonToBeanConverter = new JsonToBeanConverter();
+  private final Json json = new Json();
 
   /**
    * Encodes the given response as a HTTP response message. This method is guaranteed not to throw.
@@ -53,14 +52,14 @@ public abstract class AbstractHttpResponseCodec implements ResponseCodec<HttpRes
    * @return The encoded response.
    */
   @Override
-  public HttpResponse encode(Response response) {
+  public HttpResponse encode(Supplier<HttpResponse> factory, Response response) {
     int status = response.getStatus() == ErrorCodes.SUCCESS
                  ? HTTP_OK
                  : HTTP_INTERNAL_ERROR;
 
-    byte[] data = beanToJsonConverter.convert(response).getBytes(UTF_8);
+    byte[] data = json.toJson(getValueToEncode(response)).getBytes(UTF_8);
 
-    HttpResponse httpResponse = new HttpResponse();
+    HttpResponse httpResponse = factory.get();
     httpResponse.setStatus(status);
     httpResponse.setHeader(CACHE_CONTROL, "no-cache");
     httpResponse.setHeader(EXPIRES, "Thu, 01 Jan 1970 00:00:00 GMT");
@@ -71,12 +70,14 @@ public abstract class AbstractHttpResponseCodec implements ResponseCodec<HttpRes
     return httpResponse;
   }
 
+  protected abstract Object getValueToEncode(Response response);
+
   @Override
   public Response decode(HttpResponse encodedResponse) {
     String contentType = nullToEmpty(encodedResponse.getHeader(CONTENT_TYPE));
     String content = encodedResponse.getContentString().trim();
     try {
-      return jsonToBeanConverter.convert(Response.class, content);
+      return reconstructValue(json.toType(content, Response.class));
     } catch (JsonException e) {
       if (contentType.startsWith("application/json")) {
         throw new IllegalArgumentException(
@@ -136,4 +137,6 @@ public abstract class AbstractHttpResponseCodec implements ResponseCodec<HttpRes
     }
     return response;
   }
+
+  protected abstract Response reconstructValue(Response response);
 }

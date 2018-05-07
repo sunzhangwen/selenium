@@ -1,5 +1,3 @@
-# encoding: utf-8
-#
 # Licensed to the Software Freedom Conservancy (SFC) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -21,15 +19,19 @@ require 'timeout'
 require 'socket'
 require 'rexml/document'
 
+require 'selenium/webdriver/firefox/driver'
+
 require 'selenium/webdriver/firefox/util'
 require 'selenium/webdriver/firefox/extension'
 require 'selenium/webdriver/firefox/binary'
 require 'selenium/webdriver/firefox/profiles_ini'
 require 'selenium/webdriver/firefox/profile'
 require 'selenium/webdriver/firefox/launcher'
-require 'selenium/webdriver/firefox/bridge'
-require 'selenium/webdriver/firefox/w3c_bridge'
-require 'selenium/webdriver/firefox/binary'
+require 'selenium/webdriver/firefox/legacy/driver'
+
+require 'selenium/webdriver/firefox/marionette/bridge'
+require 'selenium/webdriver/firefox/marionette/driver'
+require 'selenium/webdriver/firefox/options'
 require 'selenium/webdriver/firefox/service'
 
 module Selenium
@@ -42,23 +44,11 @@ module Selenium
       DEFAULT_LOAD_NO_FOCUS_LIB = false
 
       def self.driver_path=(path)
-        warn <<-DEPRECATE.gsub(/\n +| {2,}/, ' ').freeze
-          [DEPRECATION] `driver_path=` is deprecated. Pass the driver path as an option instead.
-          e.g. Selenium::WebDriver.for :firefox, driver_path: '/path'
-        DEPRECATE
-
         Platform.assert_executable path
         @driver_path = path
       end
 
-      def self.driver_path(warning = true)
-        if warning
-          warn <<-DEPRECATE.gsub(/\n +| {2,}/, ' ').freeze
-            [DEPRECATION] `driver_path` is deprecated. Pass the driver path as an option instead.
-            e.g. Selenium::WebDriver.for :firefox, driver_path: '/path'
-          DEPRECATE
-        end
-
+      def self.driver_path
         @driver_path ||= nil
       end
 

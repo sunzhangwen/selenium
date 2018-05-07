@@ -19,16 +19,17 @@ package org.openqa.selenium.safari;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 
+import com.google.auto.service.AutoService;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
+import org.openqa.selenium.Capabilities;
 import org.openqa.selenium.WebDriverException;
 import org.openqa.selenium.net.PortProber;
 import org.openqa.selenium.remote.service.DriverService;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.MalformedURLException;
 
 public class SafariDriverService extends DriverService {
 
@@ -41,17 +42,28 @@ public class SafariDriverService extends DriverService {
     super(executable, port, args, environment);
   }
 
+  public static SafariDriverService createDefaultService() {
+    return createDefaultService(new SafariOptions());
+  }
+
+  /**
+   * Use {@link #createDefaultService()} instead.
+   */
   public static SafariDriverService createDefaultService(SafariOptions options) {
     File exe = options.getUseTechnologyPreview() ?
                TP_SAFARI_DRIVER_EXECUTABLE : SAFARI_DRIVER_EXECUTABLE;
     if (exe.exists()) {
-      return new Builder().usingPort(options.getPort()).usingDriverExecutable(exe).build();
+      return new Builder().usingDriverExecutable(exe).build();
     }
-    return null;
+    throw new WebDriverException("SafariDriver requires Safari 10 running on OSX El Capitan or greater.");
+  }
+
+  static SafariDriverService createDefaultService(Capabilities caps) {
+    return createDefaultService(new SafariOptions(caps));
   }
 
   @Override
-  protected void waitUntilAvailable() throws MalformedURLException {
+  protected void waitUntilAvailable() {
     try {
       PortProber.waitForPortUp(getUrl().getPort(), 20, SECONDS);
     } catch (RuntimeException e) {
@@ -59,8 +71,13 @@ public class SafariDriverService extends DriverService {
     }
   }
 
+  @AutoService(DriverService.Builder.class)
   public static class Builder extends DriverService.Builder<
     SafariDriverService, SafariDriverService.Builder> {
+
+    public Builder() {
+      usingTechnologyPreview(false);
+    }
 
     public SafariDriverService.Builder usingTechnologyPreview(boolean useTechnologyPreview) {
       if (useTechnologyPreview) {

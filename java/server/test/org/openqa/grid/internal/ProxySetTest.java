@@ -23,7 +23,9 @@ import static org.junit.Assert.assertNull;
 
 import org.junit.Test;
 import org.openqa.grid.common.RegistrationRequest;
+import org.openqa.grid.internal.utils.configuration.GridHubConfiguration;
 import org.openqa.grid.internal.utils.configuration.GridNodeConfiguration;
+import org.openqa.grid.web.Hub;
 import org.openqa.selenium.remote.BrowserType;
 import org.openqa.selenium.remote.DesiredCapabilities;
 
@@ -34,7 +36,7 @@ public class ProxySetTest {
 
   @Test
   public void removeIfPresent() throws Exception {
-    Registry registry = Registry.newInstance();
+    GridRegistry registry = DefaultGridRegistry.newInstance(new Hub(new GridHubConfiguration()));
     try {
       ProxySet set = registry.getAllProxies();
       RemoteProxy
@@ -61,7 +63,7 @@ public class ProxySetTest {
 
   @Test
   public void testProxySortingByIdle() throws Exception {
-    Registry registry = Registry.newInstance();
+    GridRegistry registry = DefaultGridRegistry.newInstance(new Hub(new GridHubConfiguration()));
     try {
       ProxySet set = registry.getAllProxies();
 
@@ -93,7 +95,7 @@ public class ProxySetTest {
 
   }
 
-  public StubbedRemoteProxy buildStubbedRemoteProxy(Registry registry, int totalUsed) {
+  public StubbedRemoteProxy buildStubbedRemoteProxy(GridRegistry registry, int totalUsed) {
     GridNodeConfiguration config = new GridNodeConfiguration();
     config.host = "remote_host";
     config.port = totalUsed;
@@ -116,7 +118,7 @@ public class ProxySetTest {
     private int testsRunning;
 
     public StubbedRemoteProxy(RegistrationRequest request,
-                              Registry registry) {
+                              GridRegistry registry) {
 
       super(request, registry);
     }

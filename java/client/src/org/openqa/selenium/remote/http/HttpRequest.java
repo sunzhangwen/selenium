@@ -17,10 +17,16 @@
 
 package org.openqa.selenium.remote.http;
 
+import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.Multimap;
+
+import java.util.Objects;
+
 public class HttpRequest extends HttpMessage {
 
   private final HttpMethod method;
   private final String uri;
+  private final Multimap<String, String> queryParameters = ArrayListMultimap.create();
 
   public HttpRequest(HttpMethod method, String uri) {
     this.method = method;
@@ -33,5 +39,30 @@ public class HttpRequest extends HttpMessage {
 
   public HttpMethod getMethod() {
     return method;
+  }
+
+  /**
+   * Get a query parameter. The implementation will take care of decoding the from percent encoding.
+   */
+  public String getQueryParameter(String name) {
+    return queryParameters.get(name).stream().findFirst().orElse(null);
+  }
+
+  /**
+   * Set a query parameter, adding to existing values if present. The implementation will ensure
+   * that the name and value are properly encoded.
+   */
+  public void addQueryParameter(String name, String value) {
+    queryParameters.put(
+        Objects.requireNonNull(name, "Name must be set"),
+        Objects.requireNonNull(value, "Value must be set"));
+  }
+
+  public Iterable<String> getQueryParameterNames() {
+    return queryParameters.keySet();
+  }
+
+  public Iterable<String> getQueryParameters(String name) {
+    return queryParameters.get(name);
   }
 }

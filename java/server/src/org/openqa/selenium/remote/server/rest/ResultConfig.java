@@ -17,7 +17,6 @@
 
 package org.openqa.selenium.remote.server.rest;
 
-import com.google.common.base.Optional;
 import com.google.common.collect.Lists;
 
 import org.openqa.selenium.NoSuchSessionException;
@@ -38,9 +37,11 @@ import org.openqa.selenium.remote.server.log.PerSessionLogHandler;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.UndeclaredThrowableException;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -53,7 +54,8 @@ public class ResultConfig {
 
   public ResultConfig(
       String commandName, Class<? extends RestishHandler<?>> handlerClazz,
-      DriverSessions sessions, Logger log) {
+      DriverSessions sessions,
+      Logger log) {
     if (commandName == null || handlerClazz == null) {
       throw new IllegalArgumentException("You must specify the handler and the command name");
     }
@@ -69,7 +71,7 @@ public class ResultConfig {
     RestishHandler<?> createHandler(SessionId sessionId) throws Exception;
   }
 
-  protected RestishHandler populate(RestishHandler handler, Command command) {
+  protected RestishHandler<?> populate(RestishHandler<?> handler, Command command) {
     for (Map.Entry<String, ?> entry : command.getParameters().entrySet()) {
       try {
         PropertyMunger.set(entry.getKey(), handler, entry.getValue());
@@ -132,9 +134,9 @@ public class ResultConfig {
       Throwable toUse = getRootExceptionCause(e);
 
       log.warning("Exception: " + toUse.getMessage());
-      Optional<String> screenshot = Optional.absent();
+      Optional<String> screenshot = Optional.empty();
       if (handler instanceof WebDriverHandler) {
-        screenshot = Optional.fromNullable(((WebDriverHandler) handler).getScreenshot());
+        screenshot = Optional.ofNullable(((WebDriverHandler<?>) handler).getScreenshot());
       }
       response = Responses.failure(sessionId, toUse, screenshot);
     } catch (Error e) {
@@ -147,7 +149,6 @@ public class ResultConfig {
       final PerSessionLogHandler logHandler = LoggingManager.perSessionLogHandler();
       logHandler.transferThreadTempLogsToSessionLogs(sessionId);
       logHandler.removeSessionLogs(sessionId);
-      sessions.deleteSession(sessionId);
     }
     return response;
   }
@@ -174,7 +175,7 @@ public class ResultConfig {
     // exception as the one to return to the client. That is the most
     // likely to contain informative data about the error.
     // This is a safety measure to make sure this loop is never endless
-    List<Throwable> chain = Lists.newArrayListWithExpectedSize(10);
+    List<Throwable> chain = new ArrayList<>(10);
     for (Throwable current = toReturn; current != null && chain.size() < 10; current =
         current.getCause()) {
       chain.add(current);
@@ -204,41 +205,26 @@ public class ResultConfig {
   private HandlerFactory getHandlerFactory(Class<? extends RestishHandler<?>> handlerClazz) {
     final Constructor<? extends RestishHandler<?>> sessionAware = getConstructor(handlerClazz, Session.class);
     if (sessionAware != null) {
-      return new HandlerFactory() {
-        @Override
-        public RestishHandler<?> createHandler(SessionId sessionId) throws Exception {
-          return sessionAware.newInstance(sessionId != null ? sessions.get(sessionId) : null);
-        }
-      };
+      return (sessionId) ->
+          sessionAware.newInstance(sessionId != null ? sessions.get(sessionId) : null);
     }
 
-    final Constructor<? extends RestishHandler> driverSessions =
+    final Constructor<? extends RestishHandler<?>> driverSessions =
         getConstructor(handlerClazz, DriverSessions.class);
     if (driverSessions != null) {
-      return new HandlerFactory() {
-        @Override
-        public RestishHandler<?> createHandler(SessionId sessionId) throws Exception {
-          return driverSessions.newInstance(sessions);
-        }
-      };
+      return (sessionId) -> driverSessions.newInstance(sessions);
     }
 
-
-    final Constructor<? extends RestishHandler> norags = getConstructor(handlerClazz);
-    if (norags != null) {
-      return new HandlerFactory() {
-        @Override
-        public RestishHandler<?> createHandler(SessionId sessionId) throws Exception {
-          return norags.newInstance();
-        }
-      };
+    final Constructor<? extends RestishHandler<?>> noArgs = getConstructor(handlerClazz);
+    if (noArgs != null) {
+      return (sessionId) -> noArgs.newInstance();
     }
 
     throw new IllegalArgumentException("Don't know how to construct " + handlerClazz);
   }
 
   private static Constructor<? extends RestishHandler<?>> getConstructor(
-      Class<? extends RestishHandler<?>> handlerClazz, Class... types) {
+      Class<? extends RestishHandler<?>> handlerClazz, Class<?>... types) {
     try {
       return handlerClazz.getConstructor(types);
     } catch (NoSuchMethodException e) {

@@ -77,7 +77,7 @@ namespace OpenQA.Selenium
         {
             driver.Url = javascriptPage;
             IWebElement element = driver.FindElement(By.Id("unclickable"));
-            Assert.Throws<ElementNotVisibleException>(() => element.Click());
+            Assert.That(() => element.Click(), Throws.InstanceOf<ElementNotInteractableException>());
         }
 
         [Test]
@@ -86,7 +86,7 @@ namespace OpenQA.Selenium
         {
             driver.Url = javascriptPage;
             IWebElement element = driver.FindElement(By.Id("unclickable"));
-            Assert.Throws<ElementNotVisibleException>(() => element.SendKeys("You don't see me"));
+            Assert.That(() => element.SendKeys("You don't see me"), Throws.InstanceOf<ElementNotInteractableException>());
 
             Assert.AreNotEqual(element.GetAttribute("value"), "You don't see me");
         }
@@ -97,7 +97,7 @@ namespace OpenQA.Selenium
         {
             driver.Url = javascriptPage;
             IWebElement element = driver.FindElement(By.Id("untogglable"));
-            Assert.Throws<ElementNotVisibleException>(() => element.Click());
+            Assert.That(() => element.Click(), Throws.InstanceOf<ElementNotInteractableException>());
         }
 
         [Test]
@@ -129,7 +129,6 @@ namespace OpenQA.Selenium
         [IgnoreBrowser(Browser.HtmlUnit)]
         [IgnoreBrowser(Browser.Opera)]
         [IgnoreBrowser(Browser.PhantomJS)]
-        [IgnoreBrowser(Browser.Safari)]
         public void ElementHiddenByOverflowXIsNotVisible()
         {
             string[] pages = new string[]{
@@ -189,7 +188,6 @@ namespace OpenQA.Selenium
         }
 
         [Test]
-        [IgnoreBrowser(Browser.Safari)]
         public void ElementScrollableByOverflowYIsVisible()
         {
             string[] pages = new string[]{

@@ -1,4 +1,4 @@
-﻿// <copyright file="WebDriverError.cs" company="WebDriver Committers">
+// <copyright file="WebDriverError.cs" company="WebDriver Committers">
 // Licensed to the Software Freedom Conservancy (SFC) under one
 // or more contributor license agreements. See the NOTICE file
 // distributed with this work for additional information
@@ -179,6 +179,7 @@ namespace OpenQA.Selenium.Remote
         public const string UnsupportedOperation = "unsupported operation";
 
         private static Dictionary<string, WebDriverResult> resultMap;
+        private static object lockObject = new object();
 
         /// <summary>
         /// Converts a string error to a <see cref="WebDriverResult"/> value.
@@ -187,9 +188,12 @@ namespace OpenQA.Selenium.Remote
         /// <returns>The converted <see cref="WebDriverResult"/> value.</returns>
         public static WebDriverResult ResultFromError(string error)
         {
-            if (resultMap == null)
+            lock(lockObject)
             {
-                InitializeResultMap();
+                if (resultMap == null)
+                {
+                    InitializeResultMap();
+                }
             }
 
             if (!resultMap.ContainsKey(error))
@@ -203,11 +207,12 @@ namespace OpenQA.Selenium.Remote
         private static void InitializeResultMap()
         {
             resultMap = new Dictionary<string, WebDriverResult>();
+            resultMap[ElementClickIntercepted] = WebDriverResult.ElementClickIntercepted;
             resultMap[ElementNotSelectable] = WebDriverResult.ElementNotSelectable;
             resultMap[ElementNotVisible] = WebDriverResult.ElementNotDisplayed;
-            resultMap[ElementNotInteractable] = WebDriverResult.ElementNotDisplayed;
+            resultMap[ElementNotInteractable] = WebDriverResult.ElementNotInteractable;
             resultMap[InsecureCertificate] = WebDriverResult.InsecureCertificate;
-            resultMap[InvalidArgument] = WebDriverResult.IndexOutOfBounds;
+            resultMap[InvalidArgument] = WebDriverResult.InvalidArgument;
             resultMap[InvalidCookieDomain] = WebDriverResult.InvalidCookieDomain;
             resultMap[InvalidCoordinates] = WebDriverResult.InvalidElementCoordinates;
             resultMap[InvalidElementCoordinates] = WebDriverResult.InvalidElementCoordinates;
@@ -215,18 +220,18 @@ namespace OpenQA.Selenium.Remote
             resultMap[InvalidSelector] = WebDriverResult.InvalidSelector;
             resultMap[InvalidSessionId] = WebDriverResult.NoSuchDriver;
             resultMap[JavaScriptError] = WebDriverResult.UnexpectedJavaScriptError;
-            resultMap[MoveTargetOutOfBounds] = WebDriverResult.InvalidElementCoordinates;
+            resultMap[MoveTargetOutOfBounds] = WebDriverResult.MoveTargetOutOfBounds;
             resultMap[NoSuchAlert] = WebDriverResult.NoAlertPresent;
             resultMap[NoSuchCookie] = WebDriverResult.NoSuchCookie;
             resultMap[NoSuchElement] = WebDriverResult.NoSuchElement;
             resultMap[NoSuchFrame] = WebDriverResult.NoSuchFrame;
             resultMap[NoSuchWindow] = WebDriverResult.NoSuchWindow;
             resultMap[ScriptTimeout] = WebDriverResult.AsyncScriptTimeout;
-            resultMap[SessionNotCreated] = WebDriverResult.NoSuchDriver;
+            resultMap[SessionNotCreated] = WebDriverResult.SessionNotCreated;
             resultMap[StaleElementReference] = WebDriverResult.ObsoleteElement;
             resultMap[Timeout] = WebDriverResult.Timeout;
             resultMap[UnableToSetCookie] = WebDriverResult.UnableToSetCookie;
-            resultMap[UnableToCaptureScreen] = WebDriverResult.UnhandledError;
+            resultMap[UnableToCaptureScreen] = WebDriverResult.UnableToCaptureScreen;
             resultMap[UnexpectedAlertOpen] = WebDriverResult.UnexpectedAlertOpen;
             resultMap[UnknownCommand] = WebDriverResult.UnknownCommand;
             resultMap[UnknownError] = WebDriverResult.UnhandledError;

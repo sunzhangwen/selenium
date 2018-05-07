@@ -1,4 +1,4 @@
-﻿// <copyright file="HttpCommandExecutor.cs" company="WebDriver Committers">
+// <copyright file="HttpCommandExecutor.cs" company="WebDriver Committers">
 // Licensed to the Software Freedom Conservancy (SFC) under one
 // or more contributor license agreements. See the NOTICE file
 // distributed with this work for additional information
@@ -17,24 +17,30 @@
 // </copyright>
 
 using System;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Net;
 using System.Text;
+using OpenQA.Selenium.Internal;
 
 namespace OpenQA.Selenium.Remote
 {
     /// <summary>
     /// Provides a way of executing Commands over HTTP
     /// </summary>
-    internal class HttpCommandExecutor : ICommandExecutor
+    public class HttpCommandExecutor : ICommandExecutor
     {
         private const string JsonMimeType = "application/json";
-        private const string ContentTypeHeader = JsonMimeType + ";charset=utf-8";
-        private const string RequestAcceptHeader = JsonMimeType + ", image/png";
+        private const string PngMimeType = "image/png";
+        private const string CharsetType = "charset=utf-8";
+        private const string ContentTypeHeader = JsonMimeType + ";" + CharsetType;
+        private const string RequestAcceptHeader = JsonMimeType + ", " + PngMimeType;
+        private const string UserAgentHeaderTemplate = "selenium/{0} (.net {1})";
         private Uri remoteServerUri;
         private TimeSpan serverResponseTimeout;
         private bool enableKeepAlive;
+        private bool isDisposed;
         private CommandInfoRepository commandInfoRepository = new WebDriverWireProtocolCommandInfoRepository();
 
         /// <summary>
@@ -71,6 +77,7 @@ namespace OpenQA.Selenium.Remote
             this.enableKeepAlive = enableKeepAlive;
 
             ServicePointManager.Expect100Continue = false;
+            ServicePointManager.DefaultConnectionLimit = 2000;
 
             // In the .NET Framework, HttpWebRequest responses with an error code are limited
             // to 64k by default. Since the remote server error responses include a screenshot,
@@ -80,7 +87,14 @@ namespace OpenQA.Selenium.Remote
             {
                 HttpWebRequest.DefaultMaximumErrorResponseLength = -1;
             }
+
+
         }
+
+        [Obsolete("Replaced by the SendingRemoteHttpRequest event. This event is a no-op, and event handlers for it will no longer be called.")]
+        public event EventHandler<BeforeRemoteHttpRequestEventArgs> BeforeRemoteHttpRequest;
+
+        public event EventHandler<SendingRemoteHttpRequestEventArgs> SendingRemoteHttpRequest;
 
         /// <summary>
         /// Gets the repository of objects containin information about commands.
@@ -103,22 +117,11 @@ namespace OpenQA.Selenium.Remote
             }
 
             CommandInfo info = this.commandInfoRepository.GetCommandInfo(commandToExecute.Name);
-            HttpWebRequest request = info.CreateWebRequest(this.remoteServerUri, commandToExecute);
-            request.Timeout = (int)this.serverResponseTimeout.TotalMilliseconds;
-            request.Accept = RequestAcceptHeader;
-            request.KeepAlive = this.enableKeepAlive;
-            request.ServicePoint.ConnectionLimit = 2000;
-            if (request.Method == CommandInfo.PostCommand)
-            {
-                string payload = commandToExecute.ParametersAsJsonString;
-                byte[] data = Encoding.UTF8.GetBytes(payload);
-                request.ContentType = ContentTypeHeader;
-                Stream requestStream = request.GetRequestStream();
-                requestStream.Write(data, 0, data.Length);
-                requestStream.Close();
-            }
+            HttpRequestInfo requestInfo = new HttpRequestInfo(this.remoteServerUri, commandToExecute, info);
 
-            Response toReturn = this.CreateResponse(request);
+            HttpResponseInfo responseInfo = this.MakeHttpRequest(requestInfo);
+
+            Response toReturn = this.CreateResponse(responseInfo);
             if (commandToExecute.Name == DriverCommand.NewSession && toReturn.IsSpecificationCompliant)
             {
                 // If we are creating a new session, sniff the response to determine
@@ -133,6 +136,23 @@ namespace OpenQA.Selenium.Remote
             }
 
             return toReturn;
+        }
+
+        /// <summary>
+        /// Raises the <see cref="SendingRemoteHttpRequest"/> event.
+        /// </summary>
+        /// <param name="eventArgs">A <see cref="SendingRemoteHttpRequestEventArgs"/> that contains the event data.</param>
+        protected virtual void OnSendingRemoteHttpRequest(SendingRemoteHttpRequestEventArgs eventArgs)
+        {
+            if (eventArgs == null)
+            {
+                throw new ArgumentNullException("eventArgs", "eventArgs must not be null");
+            }
+
+            if (this.SendingRemoteHttpRequest != null)
+            {
+                this.SendingRemoteHttpRequest(this, eventArgs);
+            }
         }
 
         private static string GetTextOfWebResponse(HttpWebResponse webResponse)
@@ -153,9 +173,43 @@ namespace OpenQA.Selenium.Remote
             return responseString;
         }
 
-        private Response CreateResponse(WebRequest request)
+        private HttpResponseInfo MakeHttpRequest(HttpRequestInfo requestInfo)
         {
-            Response commandResponse = new Response();
+            HttpWebRequest request = HttpWebRequest.Create(requestInfo.FullUri) as HttpWebRequest;
+            if (!string.IsNullOrEmpty(requestInfo.FullUri.UserInfo) && requestInfo.FullUri.UserInfo.Contains(":"))
+            {
+                string[] userInfo = this.remoteServerUri.UserInfo.Split(new char[] { ':' }, 2);
+                request.Credentials = new NetworkCredential(userInfo[0], userInfo[1]);
+                request.PreAuthenticate = true;
+            }
+
+            string userAgentString = string.Format(CultureInfo.InvariantCulture, UserAgentHeaderTemplate, ResourceUtilities.AssemblyVersion, ResourceUtilities.PlatformFamily);
+            request.UserAgent = userAgentString;
+            request.Method = requestInfo.HttpMethod;
+            request.Timeout = (int)this.serverResponseTimeout.TotalMilliseconds;
+            request.Accept = RequestAcceptHeader;
+            request.KeepAlive = this.enableKeepAlive;
+            request.Proxy = null;
+            request.ServicePoint.ConnectionLimit = 2000;
+            if (request.Method == CommandInfo.GetCommand)
+            {
+                request.Headers.Add("Cache-Control", "no-cache");
+            }
+
+            SendingRemoteHttpRequestEventArgs eventArgs = new SendingRemoteHttpRequestEventArgs(request, requestInfo.RequestBody);
+            this.OnSendingRemoteHttpRequest(eventArgs);
+
+            if (request.Method == CommandInfo.PostCommand)
+            {
+                string payload = eventArgs.RequestBody;
+                byte[] data = Encoding.UTF8.GetBytes(payload);
+                request.ContentType = ContentTypeHeader;
+                Stream requestStream = request.GetRequestStream();
+                requestStream.Write(data, 0, data.Length);
+                requestStream.Close();
+            }
+
+            HttpResponseInfo responseInfo = new HttpResponseInfo();
             HttpWebResponse webResponse = null;
             try
             {
@@ -182,58 +236,109 @@ namespace OpenQA.Selenium.Remote
             }
             else
             {
-                string responseString = GetTextOfWebResponse(webResponse);
-                if (webResponse.ContentType != null && webResponse.ContentType.StartsWith(JsonMimeType, StringComparison.OrdinalIgnoreCase))
-                {
-                    commandResponse = Response.FromJson(responseString);
-                }
-                else
-                {
-                    commandResponse.Value = responseString;
-                }
+                responseInfo.Body = GetTextOfWebResponse(webResponse);
+                responseInfo.ContentType = webResponse.ContentType;
+                responseInfo.StatusCode = webResponse.StatusCode;
+            }
 
-                if (this.commandInfoRepository.SpecificationLevel < 1 && (webResponse.StatusCode < HttpStatusCode.OK || webResponse.StatusCode >= HttpStatusCode.BadRequest))
+            return responseInfo;
+        }
+
+        private Response CreateResponse(HttpResponseInfo stuff)
+        {
+            Response commandResponse = new Response();
+            string responseString = stuff.Body;
+            if (stuff.ContentType != null && stuff.ContentType.StartsWith(JsonMimeType, StringComparison.OrdinalIgnoreCase))
+            {
+                commandResponse = Response.FromJson(responseString);
+            }
+            else
+            {
+                commandResponse.Value = responseString;
+            }
+
+            if (this.commandInfoRepository.SpecificationLevel < 1 && (stuff.StatusCode < HttpStatusCode.OK || stuff.StatusCode >= HttpStatusCode.BadRequest))
+            {
+                // 4xx represents an unknown command or a bad request.
+                if (stuff.StatusCode >= HttpStatusCode.BadRequest && stuff.StatusCode < HttpStatusCode.InternalServerError)
                 {
-                    // 4xx represents an unknown command or a bad request.
-                    if (webResponse.StatusCode >= HttpStatusCode.BadRequest && webResponse.StatusCode < HttpStatusCode.InternalServerError)
+                    commandResponse.Status = WebDriverResult.UnhandledError;
+                }
+                else if (stuff.StatusCode >= HttpStatusCode.InternalServerError)
+                {
+                    // 5xx represents an internal server error. The response status should already be set, but
+                    // if not, set it to a general error code. The exception is a 501 (NotImplemented) response,
+                    // which indicates that the command hasn't been implemented on the server.
+                    if (stuff.StatusCode == HttpStatusCode.NotImplemented)
                     {
-                        commandResponse.Status = WebDriverResult.UnhandledError;
-                    }
-                    else if (webResponse.StatusCode >= HttpStatusCode.InternalServerError)
-                    {
-                        // 5xx represents an internal server error. The response status should already be set, but
-                        // if not, set it to a general error code. The exception is a 501 (NotImplemented) response,
-                        // which indicates that the command hasn't been implemented on the server.
-                        if (webResponse.StatusCode == HttpStatusCode.NotImplemented)
-                        {
-                            commandResponse.Status = WebDriverResult.UnknownCommand;
-                        }
-                        else
-                        {
-                            if (commandResponse.Status == WebDriverResult.Success)
-                            {
-                                commandResponse.Status = WebDriverResult.UnhandledError;
-                            }
-                        }
+                        commandResponse.Status = WebDriverResult.UnknownCommand;
                     }
                     else
                     {
-                        commandResponse.Status = WebDriverResult.UnhandledError;
+                        if (commandResponse.Status == WebDriverResult.Success)
+                        {
+                            commandResponse.Status = WebDriverResult.UnhandledError;
+                        }
                     }
                 }
-
-                if (commandResponse.Value is string)
+                else
                 {
-                    // First, collapse all \r\n pairs to \n, then replace all \n with
-                    // System.Environment.NewLine. This ensures the consistency of
-                    // the values.
-                    commandResponse.Value = ((string)commandResponse.Value).Replace("\r\n", "\n").Replace("\n", System.Environment.NewLine);
+                    commandResponse.Status = WebDriverResult.UnhandledError;
                 }
+            }
 
-                webResponse.Close();
+            if (commandResponse.Value is string)
+            {
+                // First, collapse all \r\n pairs to \n, then replace all \n with
+                // System.Environment.NewLine. This ensures the consistency of
+                // the values.
+                commandResponse.Value = ((string)commandResponse.Value).Replace("\r\n", "\n").Replace("\n", System.Environment.NewLine);
             }
 
             return commandResponse;
+        }
+
+        /// <summary>
+        /// Releases all resources used by the <see cref="HttpCommandExecutor"/>.
+        /// </summary>
+        public void Dispose()
+        {
+            this.Dispose(true);
+        }
+
+        /// <summary>
+        /// Releases the unmanaged resources used by the <see cref="HttpCommandExecutor"/> and
+        /// optionally releases the managed resources.
+        /// </summary>
+        /// <param name="disposing"><see langword="true"/> to release managed and resources;
+        /// <see langword="false"/> to only release unmanaged resources.</param>
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!this.isDisposed)
+            {
+                this.isDisposed = true;
+            }
+        }
+
+        private class HttpRequestInfo
+        {
+            public HttpRequestInfo(Uri serverUri, Command commandToExecute, CommandInfo commandInfo)
+            {
+                this.FullUri = commandInfo.CreateCommandUri(serverUri, commandToExecute);
+                this.HttpMethod = commandInfo.Method;
+                this.RequestBody = commandToExecute.ParametersAsJsonString;
+            }
+
+            public Uri FullUri { get; set; }
+            public string HttpMethod { get; set; }
+            public string RequestBody { get; set; }
+        }
+
+        private class HttpResponseInfo
+        {
+            public HttpStatusCode StatusCode { get; set; }
+            public string Body { get; set; }
+            public string ContentType { get; set; }
         }
     }
 }

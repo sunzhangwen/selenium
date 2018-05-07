@@ -1,5 +1,3 @@
-# encoding: utf-8
-#
 # Licensed to the Software Freedom Conservancy (SFC) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -41,11 +39,6 @@ module Selenium
 
       def text
         @bridge.alert_text
-      end
-
-      def authenticate(username, password)
-        @bridge.authentication(username: username, password: password)
-        accept
       end
     end # Alert
   end # WebDriver

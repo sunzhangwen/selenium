@@ -15,16 +15,23 @@
 // limitations under the License.
 
 #include "Browser.h"
-#include "logging.h"
+
 #include <comutil.h>
 #include <ShlGuid.h>
+
+#include "errorcodes.h"
+#include "logging.h"
+
 #include "Alert.h"
 #include "BrowserFactory.h"
+#include "messages.h"
+#include "StringUtilities.h"
 
 namespace webdriver {
 
 Browser::Browser(IWebBrowser2* browser, HWND hwnd, HWND session_handle) : DocumentHost(hwnd, session_handle) {
   LOG(TRACE) << "Entering Browser::Browser";
+  this->is_explicit_close_requested_ = false;
   this->is_navigation_started_ = false;
   this->browser_ = browser;
   this->AttachEvents();
@@ -46,6 +53,17 @@ void __stdcall Browser::BeforeNavigate2(IDispatch* pObject,
 
 void __stdcall Browser::OnQuit() {
   LOG(TRACE) << "Entering Browser::OnQuit";
+  if (!this->is_explicit_close_requested_) {
+    LOG(WARN) << "This instance of Internet Explorer is exiting without an "
+              << "explicit request to close it. Unless you clicked a link "
+              << "that specifically attempts to close the page, that likely "
+              << "means a Protected Mode boundary has been crossed (either "
+              << "entering or exiting Protected Mode). It is highly likely "
+              << "that any subsequent commands to this driver instance will "
+              << "fail. THIS IS NOT A BUG IN THE IE DRIVER! Fix your code "
+              << "and/or browser configuration so that a Protected Mode "
+              << "boundary is not crossed.";
+  }
   this->PostQuitMessage();
 }
 
@@ -107,7 +125,6 @@ void __stdcall Browser::DocumentComplete(IDispatch* pDisp, VARIANT* URL) {
       LOG(DEBUG) << "DocumentComplete happened from within a frameset";
       this->SetFocusedFrameByElement(NULL);
     }
-    ::PostMessage(this->executor_handle(), WD_REFRESH_MANAGED_ELEMENTS, NULL, NULL);
   }
 }
 
@@ -299,6 +316,7 @@ void Browser::DetachEvents() {
 
 void Browser::Close() {
   LOG(TRACE) << "Entering Browser::Close";
+  this->is_explicit_close_requested_ = true;
   // Closing the browser, so having focus on a frame doesn't
   // make any sense.
   this->SetFocusedFrameByElement(NULL);
@@ -675,33 +693,20 @@ HWND Browser::GetBrowserWindowHandle() {
   return hwnd;
 }
 
-//HWND Browser::GetTabWindowHandle() {
-//  LOG(TRACE) << "Entering Browser::GetTabWindowHandle";
-//
-//  HWND hwnd = NULL;
-//  CComPtr<IServiceProvider> service_provider;
-//  HRESULT hr = this->browser_->QueryInterface(IID_IServiceProvider,
-//                                              reinterpret_cast<void**>(&service_provider));
-//  if (SUCCEEDED(hr)) {
-//    CComPtr<IOleWindow> window;
-//    hr = service_provider->QueryService(SID_SShellBrowser,
-//                                        IID_IOleWindow,
-//                                        reinterpret_cast<void**>(&window));
-//    if (SUCCEEDED(hr)) {
-//      // This gets the TabWindowClass window in IE 7 and 8,
-//      // and the top-level window frame in IE 6. The window
-//      // we need is the InternetExplorer_Server window.
-//      window->GetWindow(&hwnd);
-//      hwnd = this->FindContentWindowHandle(hwnd);
-//    } else {
-//      LOGHR(WARN, hr) << "Unable to get window, call to IOleWindow::QueryService for SID_SShellBrowser failed";
-//    }
-//  } else {
-//    LOGHR(WARN, hr) << "Unable to get service, call to IWebBrowser2::QueryInterface for IID_IServiceProvider failed";
-//  }
-//
-//  return hwnd;
-//}
+bool Browser::SetFullScreen(bool is_full_screen) {
+  if (is_full_screen) {
+    this->browser_->put_FullScreen(VARIANT_TRUE);
+  } else {
+    this->browser_->put_FullScreen(VARIANT_FALSE);
+  }
+  return true;
+}
+
+bool Browser::IsFullScreen() {
+  VARIANT_BOOL is_full_screen = VARIANT_FALSE;
+  this->browser_->get_FullScreen(&is_full_screen);
+  return is_full_screen == VARIANT_TRUE;
+}
 
 HWND Browser::GetActiveDialogWindowHandle() {
   LOG(TRACE) << "Entering Browser::GetActiveDialogWindowHandle";

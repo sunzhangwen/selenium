@@ -15,7 +15,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-
 package com.thoughtworks.selenium.corebased;
 
 import com.thoughtworks.selenium.InternalSelenseTestBase;
@@ -28,7 +27,7 @@ import org.openqa.selenium.internal.WrapsDriver;
 import org.openqa.selenium.remote.CapabilityType;
 
 public class TestClickAt extends InternalSelenseTestBase {
-  @Test
+  @Test(timeout = 60000)
   public void testClickAt() throws Exception {
     selenium.open("../tests/html/test_click_page1.html");
     verifyEquals(selenium.getText("link"), "Click here for next page");

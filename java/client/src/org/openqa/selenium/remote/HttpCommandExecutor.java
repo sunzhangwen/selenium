@@ -36,7 +36,6 @@ import org.openqa.selenium.logging.profiler.HttpProfilerLogEntry;
 import org.openqa.selenium.remote.http.HttpClient;
 import org.openqa.selenium.remote.http.HttpRequest;
 import org.openqa.selenium.remote.http.HttpResponse;
-import org.openqa.selenium.remote.internal.ApacheHttpClient;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -45,10 +44,11 @@ import java.util.Map;
 
 public class HttpCommandExecutor implements CommandExecutor, NeedsLocalLogs {
 
-  private static HttpClient.Factory defaultClientFactory;
+  private final static HttpClient.Factory defaultClientFactory = HttpClient.Factory.createDefault();
 
   private final URL remoteServer;
   private final HttpClient client;
+  private final HttpClient.Factory httpClientFactory;
   private final Map<String, CommandInfo> additionalCommands;
   private CommandCodec<HttpRequest> commandCodec;
   private ResponseCodec<HttpResponse> responseCodec;
@@ -56,7 +56,7 @@ public class HttpCommandExecutor implements CommandExecutor, NeedsLocalLogs {
   private LocalLogs logs = LocalLogs.getNullLogger();
 
   public HttpCommandExecutor(URL addressOfRemoteServer) {
-    this(ImmutableMap.<String, CommandInfo>of(), addressOfRemoteServer);
+    this(ImmutableMap.of(), addressOfRemoteServer);
   }
 
   /**
@@ -67,8 +67,9 @@ public class HttpCommandExecutor implements CommandExecutor, NeedsLocalLogs {
    * @param addressOfRemoteServer URL of remote end Selenium server
    */
   public HttpCommandExecutor(
-      Map<String, CommandInfo> additionalCommands, URL addressOfRemoteServer) {
-    this(additionalCommands, addressOfRemoteServer, getDefaultClientFactory());
+      Map<String, CommandInfo> additionalCommands,
+      URL addressOfRemoteServer) {
+    this(additionalCommands, addressOfRemoteServer, defaultClientFactory);
   }
 
   public HttpCommandExecutor(
@@ -84,14 +85,8 @@ public class HttpCommandExecutor implements CommandExecutor, NeedsLocalLogs {
     }
 
     this.additionalCommands = additionalCommands;
+    this.httpClientFactory = httpClientFactory;
     this.client = httpClientFactory.createClient(remoteServer);
-  }
-
-  private static synchronized HttpClient.Factory getDefaultClientFactory() {
-    if (defaultClientFactory == null) {
-      defaultClientFactory = new ApacheHttpClient.Factory();
-    }
-    return defaultClientFactory;
   }
 
   /**
@@ -157,7 +152,7 @@ public class HttpCommandExecutor implements CommandExecutor, NeedsLocalLogs {
     HttpRequest httpRequest = commandCodec.encode(command);
     try {
       log(LogType.PROFILER, new HttpProfilerLogEntry(command.getName(), true));
-      HttpResponse httpResponse = client.execute(httpRequest, true);
+      HttpResponse httpResponse = client.execute(httpRequest);
       log(LogType.PROFILER, new HttpProfilerLogEntry(command.getName(), false));
 
       Response response = responseCodec.decode(httpResponse);
@@ -170,7 +165,7 @@ public class HttpCommandExecutor implements CommandExecutor, NeedsLocalLogs {
         }
       }
       if (QUIT.equals(command.getName())) {
-    	  client.close();
+        httpClientFactory.cleanupIdleClients();
       }
       return response;
     } catch (UnsupportedCommandException e) {

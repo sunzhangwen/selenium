@@ -38,6 +38,7 @@ from selenium.common.exceptions import (
     TimeoutException,
     WebDriverException)
 from selenium.webdriver.support.wait import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 
 def testGetTitle(driver, pages):
@@ -181,11 +182,10 @@ def testIsSelectedAndToggle(driver, pages):
     assert option_elems[2].is_selected()
 
 
-@pytest.mark.xfail_marionette(reason="https://bugzilla.mozilla.org/show_bug.cgi?id=1291320")
 def testNavigate(driver, pages):
     pages.load("formPage.html")
     driver.find_element_by_id("imageButton").submit()
-    assert "We Arrive Here" == driver.title
+    WebDriverWait(driver, 3).until(EC.title_is("We Arrive Here"))
     driver.back()
     assert "We Leave From Here" == driver.title
     driver.forward()
@@ -254,8 +254,6 @@ def testIsElementDisplayed(driver, pages):
     assert not not_visible
 
 
-@pytest.mark.xfail_phantomjs(
-    reason='https://github.com/detro/ghostdriver/issues/466')
 def testMoveWindowPosition(driver, pages):
     pages.load("blank.html")
     loc = driver.get_window_position()

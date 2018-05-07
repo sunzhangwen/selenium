@@ -1,5 +1,3 @@
-# encoding: utf-8
-#
 # Licensed to the Software Freedom Conservancy (SFC) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -38,8 +36,9 @@ module Selenium
         port
       end
 
-      IGNORED_ERRORS = [Errno::EADDRNOTAVAIL]
+      IGNORED_ERRORS = [Errno::EADDRNOTAVAIL, Errno::EAFNOSUPPORT]
       IGNORED_ERRORS << Errno::EBADF if Platform.cygwin?
+      IGNORED_ERRORS << Errno::EACCES if Platform.windows?
       IGNORED_ERRORS.freeze
 
       def self.free?(port)
@@ -47,7 +46,7 @@ module Selenium
           begin
             TCPServer.new(host, port).close
           rescue *IGNORED_ERRORS => ex
-            WebDriver.logger.info("port prober could not bind to #{host}:#{port} (#{ex.message})")
+            WebDriver.logger.debug("port prober could not bind to #{host}:#{port} (#{ex.message})")
             # ignored - some machines appear unable to bind to some of their interfaces
           end
         end

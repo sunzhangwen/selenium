@@ -19,19 +19,26 @@ package org.openqa.selenium.remote.http;
 
 import static com.google.common.base.Strings.nullToEmpty;
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
+import static java.net.HttpURLConnection.HTTP_INTERNAL_ERROR;
 import static java.net.HttpURLConnection.HTTP_OK;
+import static org.openqa.selenium.json.Json.MAP_TYPE;
+import static org.openqa.selenium.json.Json.OBJECT_TYPE;
 
 import com.google.common.base.Strings;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import com.google.common.base.Throwables;
 
+import org.openqa.selenium.UnhandledAlertException;
 import org.openqa.selenium.WebDriverException;
+import org.openqa.selenium.json.Json;
 import org.openqa.selenium.remote.ErrorCodes;
-import org.openqa.selenium.remote.JsonToBeanConverter;
 import org.openqa.selenium.remote.Response;
+import org.openqa.selenium.remote.internal.JsonToWebElementConverter;
 
 import java.lang.reflect.Constructor;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.logging.Logger;
 
 /**
@@ -59,7 +66,8 @@ public class W3CHttpResponseCodec extends AbstractHttpResponseCodec {
   private static final Logger log = Logger.getLogger(W3CHttpResponseCodec.class.getName());
 
   private final ErrorCodes errorCodes = new ErrorCodes();
-  private final JsonToBeanConverter jsonToBeanConverter = new JsonToBeanConverter();
+  private final Json json = new Json();
+  private final Function<Object, Object> elementConverter = new JsonToWebElementConverter(null);
 
   @Override
   public Response decode(HttpResponse encodedResponse) {
@@ -76,21 +84,43 @@ public class W3CHttpResponseCodec extends AbstractHttpResponseCodec {
     // {"error":"no such alert","message":"No tab modal was open when attempting to get the dialog text"}
     if (HTTP_OK != encodedResponse.getStatus()) {
       log.fine("Processing an error");
-      JsonObject obj = new JsonParser().parse(content).getAsJsonObject();
+      Map<String, Object> obj = json.toType(content, MAP_TYPE);
+
+
+      Object w3cWrappedValue = obj.get("value");
+      if (w3cWrappedValue instanceof Map && ((Map<?, ?>) w3cWrappedValue).containsKey("error")) {
+        //noinspection unchecked
+        obj = (Map<String, Object>) w3cWrappedValue;
+      }
 
       String message = "An unknown error has occurred";
-      if (obj.has("message")) {
-        message = obj.get("message").getAsString();
+      if (obj.get("message") instanceof String) {
+        message = (String) obj.get("message");
       }
 
       String error = "unknown error";
-      if (obj.has("error")) {
-        error = obj.get("error").getAsString();
+      if (obj.get("error") instanceof String) {
+        error = (String) obj.get("error");
       }
 
       response.setState(error);
       response.setStatus(errorCodes.toStatus(error, Optional.of(encodedResponse.getStatus())));
-      response.setValue(createException(error, message));
+
+      // For now, we'll inelegantly special case unhandled alerts.
+      if ("unexpected alert open".equals(error) &&
+          HTTP_INTERNAL_ERROR == encodedResponse.getStatus()) {
+        String text = "";
+        Object data = obj.get("data");
+        if (data != null) {
+          Object rawText = ((Map<?, ?>) data).get("text");
+          if (rawText instanceof String) {
+            text = (String) rawText;
+          }
+        }
+        response.setValue(new UnhandledAlertException(message, text));
+      } else {
+        response.setValue(createException(error, message));
+      }
       return response;
     }
 
@@ -98,13 +128,13 @@ public class W3CHttpResponseCodec extends AbstractHttpResponseCodec {
     response.setStatus(ErrorCodes.SUCCESS);
     if (encodedResponse.getContent().length > 0) {
       if (contentType.startsWith("application/json") || Strings.isNullOrEmpty("")) {
-        JsonObject parsed = new JsonParser().parse(content).getAsJsonObject();
-        if (parsed.has("value")) {
-          Object value = jsonToBeanConverter.convert(Object.class, parsed.get("value"));
+        Map<String, Object> parsed = json.toType(content, MAP_TYPE);
+        if (parsed.containsKey("value")) {
+          Object value = parsed.get("value");
           response.setValue(value);
         } else {
           // Assume that the body of the response was the response.
-          response.setValue(jsonToBeanConverter.convert(Object.class, content));
+          response.setValue(json.toType(content, OBJECT_TYPE));
         }
       }
     }
@@ -116,6 +146,36 @@ public class W3CHttpResponseCodec extends AbstractHttpResponseCodec {
       response.setValue(((String) response.getValue()).replace("\r\n", "\n"));
     }
 
+    return response;
+  }
+
+  @Override
+  protected Object getValueToEncode(Response response) {
+    HashMap<Object, Object> toReturn = new HashMap<>();
+    Object value = response.getValue();
+    if (value instanceof WebDriverException) {
+      HashMap<Object, Object> exception = new HashMap<>();
+      exception.put(
+          "error",
+          response.getState() != null ?
+          response.getState() :
+          errorCodes.toState(response.getStatus()));
+      exception.put("message", ((WebDriverException) value).getMessage());
+      exception.put("stacktrace", Throwables.getStackTraceAsString((WebDriverException) value));
+      if (value instanceof UnhandledAlertException) {
+        HashMap<String, Object> data = new HashMap<>();
+        data.put("text", ((UnhandledAlertException) value).getAlertText());
+        exception.put("data", data);
+      }
+
+      value = exception;
+    }
+    toReturn.put("value", value);
+    return toReturn;
+  }
+
+  protected Response reconstructValue(Response response) {
+    response.setValue(elementConverter.apply(response.getValue()));
     return response;
   }
 

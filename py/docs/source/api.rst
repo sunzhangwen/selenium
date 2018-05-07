@@ -61,6 +61,7 @@ Webdriver.chrome
 .. autosummary::
    :toctree: webdriver_chrome
 
+   selenium.webdriver.chrome.options
    selenium.webdriver.chrome.service
    selenium.webdriver.chrome.webdriver
 
@@ -119,6 +120,16 @@ Webdriver.remote
    selenium.webdriver.remote.utils
    selenium.webdriver.remote.webdriver
    selenium.webdriver.remote.webelement
+
+Webdriver.safari
+----------------
+
+.. currentmodule:: selenium.webdriver.safari
+.. autosummary::
+  :toctree: webdriver_safari
+
+  selenium.webdriver.safari.service
+  selenium.webdriver.safari.webdriver
 
 Indices and tables
 

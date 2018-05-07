@@ -22,18 +22,16 @@ import static org.junit.Assert.assertEquals;
 import static org.openqa.selenium.remote.CapabilityType.PROXY;
 import static org.openqa.selenium.support.ui.ExpectedConditions.presenceOfElementLocated;
 import static org.openqa.selenium.support.ui.ExpectedConditions.titleIs;
-import static org.openqa.selenium.testing.Driver.HTMLUNIT;
+import static org.openqa.selenium.testing.Driver.FIREFOX;
 import static org.openqa.selenium.testing.Driver.IE;
 import static org.openqa.selenium.testing.Driver.MARIONETTE;
-import static org.openqa.selenium.testing.Driver.PHANTOMJS;
 import static org.openqa.selenium.testing.Driver.SAFARI;
 import static org.openqa.selenium.testing.InProject.locate;
 
-import com.google.common.base.Charsets;
 import com.google.common.base.Joiner;
 import com.google.common.base.Objects;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
 import com.google.common.net.HostAndPort;
 import com.google.common.net.HttpHeaders;
 
@@ -43,12 +41,10 @@ import org.junit.Test;
 import org.junit.rules.ExternalResource;
 import org.openqa.selenium.net.PortProber;
 import org.openqa.selenium.net.UrlChecker;
-import org.openqa.selenium.remote.DesiredCapabilities;
 import org.openqa.selenium.support.ui.WebDriverWait;
 import org.openqa.selenium.testing.Ignore;
 import org.openqa.selenium.testing.JUnit4TestBase;
 import org.openqa.selenium.testing.NeedsLocalEnvironment;
-import org.openqa.selenium.testing.NotYetImplemented;
 import org.openqa.selenium.testing.drivers.WebDriverBuilder;
 import org.seleniumhq.jetty9.server.Handler;
 import org.seleniumhq.jetty9.server.Request;
@@ -62,6 +58,7 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.file.Files;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 
 import javax.servlet.ServletException;
@@ -92,10 +89,7 @@ import javax.servlet.http.HttpServletResponse;
  * <p>Note: depending on the condition under test, the various pages may or may
  * not be served by the same server.
  */
-@Ignore(
-    value = {PHANTOMJS, SAFARI},
-    reason = "Opera/PhantomJS - not tested, " +
-             "Safari - not implemented")
+@Ignore(SAFARI)
 public class ReferrerTest extends JUnit4TestBase {
 
   private static String page1;
@@ -120,8 +114,6 @@ public class ReferrerTest extends JUnit4TestBase {
    * does not have a proxy configured.
    */
   @Test
-  @NotYetImplemented(HTMLUNIT)
-  @Ignore(value = HTMLUNIT, reason = "Possible bug in getAttribute?")
   @NeedsLocalEnvironment
   public void basicHistoryNavigationWithoutAProxy() {
     testServer1.start();
@@ -144,8 +136,6 @@ public class ReferrerTest extends JUnit4TestBase {
    * Tests navigation across multiple domains when the browser does not have a proxy configured.
    */
   @Test
-  @NotYetImplemented(HTMLUNIT)
-  @Ignore(value = HTMLUNIT, reason = "Possible bug in getAttribute?")
   @NeedsLocalEnvironment
   public void crossDomainHistoryNavigationWithoutAProxy() {
 
@@ -176,8 +166,6 @@ public class ReferrerTest extends JUnit4TestBase {
    * configured to use a proxy that permits direct access to that domain.
    */
   @Test
-  @NotYetImplemented(HTMLUNIT)
-  @Ignore(value = HTMLUNIT, reason = "Possible bug in getAttribute?")
   @NeedsLocalEnvironment
   public void basicHistoryNavigationWithADirectProxy() {
     testServer1.start();
@@ -206,8 +194,6 @@ public class ReferrerTest extends JUnit4TestBase {
    * permits direct access to those domains.
    */
   @Test
-  @NotYetImplemented(HTMLUNIT)
-  @Ignore(value = HTMLUNIT, reason = "Possible bug in getAttribute?")
   @NeedsLocalEnvironment
   public void crossDomainHistoryNavigationWithADirectProxy() {
     testServer1.start();
@@ -241,8 +227,6 @@ public class ReferrerTest extends JUnit4TestBase {
    * Tests navigation across multiple domains when the browser is configured to use a proxy that
    * redirects the second domain to another host.
    */
-  @Ignore({HTMLUNIT, MARIONETTE})
-  @NotYetImplemented(HTMLUNIT)
   @Test
   @NeedsLocalEnvironment
   public void crossDomainHistoryNavigationWithAProxiedHost() {
@@ -282,8 +266,6 @@ public class ReferrerTest extends JUnit4TestBase {
    * intercepts requests to a specific host (www.example.com) - all other requests are permitted
    * to connect directly to the target server.
    */
-  @Ignore({HTMLUNIT, MARIONETTE})
-  @NotYetImplemented(HTMLUNIT)
   @Test
   @NeedsLocalEnvironment
   public void crossDomainHistoryNavigationWhenProxyInterceptsHostRequests() {
@@ -320,12 +302,11 @@ public class ReferrerTest extends JUnit4TestBase {
    * Tests navigation on a single domain where the browser is configured to use a proxy that
    * intercepts requests for page 2.
    */
-  @Ignore(
-      value = {HTMLUNIT, IE, MARIONETTE},
-      reason = "IEDriver does not disable automatic proxy caching, causing this test to fail.",
-      issues = 6629)
-  @NotYetImplemented(HTMLUNIT)
   @Test
+  @Ignore(value = IE,
+      reason = "IEDriver does not disable automatic proxy caching, causing this test to fail, issue 6629")
+  @Ignore(MARIONETTE)
+  @Ignore(value = FIREFOX, travis=true)
   @NeedsLocalEnvironment
   public void navigationWhenProxyInterceptsASpecificUrl() {
     testServer1.start();
@@ -379,16 +360,8 @@ public class ReferrerTest extends JUnit4TestBase {
     wait.until(titleIs("Page 3"));
   }
 
-  private static String buildPage1Url(String nextUrl) {
-    return "/page1.html?next=" + encode(nextUrl);
-  }
-
   private static String buildPage1Url(ServerResource server, String nextUrl) {
     return server.getBaseUrl() + "/page1.html?next=" + encode(nextUrl);
-  }
-
-  private static String buildPage2Url(String nextUrl) {
-    return "/page2.html?next=" + encode(nextUrl);
   }
 
   private static String buildPage2Url(String server, String nextUrl) {
@@ -407,17 +380,13 @@ public class ReferrerTest extends JUnit4TestBase {
     return server.getBaseUrl() + "/page2.html";  // Nothing special here.
   }
 
-  private static String buildPage3Url() {
-    return "/page3.html";  // Nothing special here.
-  }
-
   private static String buildPage3Url(ServerResource server) {
     return server.getBaseUrl() + "/page3.html";  // Nothing special here.
   }
 
   private static String encode(String url) {
     try {
-      return URLEncoder.encode(url, Charsets.UTF_8.name());
+      return URLEncoder.encode(url, UTF_8.name());
     } catch (UnsupportedEncodingException e) {
       throw new RuntimeException("UTF-8 should always be supported!", e);
     }
@@ -434,10 +403,9 @@ public class ReferrerTest extends JUnit4TestBase {
       Proxy proxy = new Proxy();
       proxy.setProxyAutoconfigUrl(pacUrl);
 
-      DesiredCapabilities caps = new DesiredCapabilities();
-      caps.setCapability(PROXY, proxy);
+      Capabilities caps = new ImmutableCapabilities(PROXY, proxy);
 
-      return driver = new WebDriverBuilder().setDesiredCapabilities(caps).get();
+      return driver = new WebDriverBuilder().get(caps);
     }
 
     @Override
@@ -454,15 +422,18 @@ public class ReferrerTest extends JUnit4TestBase {
    */
   private abstract static class ServerResource extends ExternalResource {
     protected final Server server;
+    private final HostAndPort hostAndPort;
 
     ServerResource() {
-      server = new Server();
+      this.server = new Server();
 
       ServerConnector http = new ServerConnector(server);
       int port = PortProber.findFreePort();
       http.setPort(port);
       http.setIdleTimeout(500000);
-      server.addConnector(http);
+
+      this.server.addConnector(http);
+      this.hostAndPort = HostAndPort.fromParts("localhost", port);
     }
 
     void addHandler(Handler handler) {
@@ -470,7 +441,7 @@ public class ReferrerTest extends JUnit4TestBase {
     }
 
     HostAndPort getHostAndPort() {
-      return HostAndPort.fromParts(server.getURI().getHost(), server.getURI().getPort());
+      return Preconditions.checkNotNull(hostAndPort);
     }
 
     String getBaseUrl() {
@@ -527,7 +498,7 @@ public class ReferrerTest extends JUnit4TestBase {
     private final List<HttpRequest> requests;
 
     TestServer() {
-      requests = Lists.newCopyOnWriteArrayList();
+      requests = new CopyOnWriteArrayList<>();
       addHandler(new PageRequestHandler(requests));
     }
 
@@ -542,7 +513,7 @@ public class ReferrerTest extends JUnit4TestBase {
     private String pacFileContents;
 
     ProxyServer() {
-      requests = Lists.newCopyOnWriteArrayList();
+      requests = new CopyOnWriteArrayList<>();
       addHandler(new PageRequestHandler(requests) {
         @Override
         public void handle(String s, Request baseRequest, HttpServletRequest request,

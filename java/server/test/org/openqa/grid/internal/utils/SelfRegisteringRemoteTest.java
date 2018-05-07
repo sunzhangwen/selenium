@@ -36,10 +36,10 @@ import javax.servlet.Servlet;
 public class SelfRegisteringRemoteTest {
 
   private final class DummyGridNodeServer implements GridNodeServer {
-    public Map<String, Class<? extends Servlet>> extraServlets;
+    private Map<String, Class<? extends Servlet>> extraServlets;
 
     @Override
-    public void boot() throws Exception { }
+    public boolean boot() { return true; }
 
     @Override
     public void stop() { }
@@ -87,7 +87,7 @@ public class SelfRegisteringRemoteTest {
 
     // there should be three servlets on the remote's map -- The resource servlet, the
     // help servlet, and the one we added above.
-    assertEquals(3, remote.getNodeServlets().size());
+    assertEquals(5, remote.getNodeServlets().size());
     assertEquals(ResourceServlet.class, remote.getNodeServlets().get("/resources/*"));
     assertEquals(DisplayHelpServlet.class,
                  remote.getNodeServlets().get("/extra/DisplayHelpServlet/*"));
@@ -97,7 +97,7 @@ public class SelfRegisteringRemoteTest {
     remote.startRemoteServer(); // does not actually start anything.
 
     // verify the expected extra servlets also made it to the server instance
-    assertEquals(3, ((DummyGridNodeServer) server).extraServlets.size());
+    assertEquals(5, ((DummyGridNodeServer) server).extraServlets.size());
     assertEquals(ResourceServlet.class,
                  ((DummyGridNodeServer) server).extraServlets.get("/resources/*"));
     assertEquals(DisplayHelpServlet.class,

@@ -17,111 +17,106 @@
 
 package org.openqa.grid.web.servlet;
 
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import com.google.gson.JsonSyntaxException;
+import static org.openqa.selenium.json.Json.MAP_TYPE;
+
+import com.google.common.collect.ImmutableMap;
 
 import org.openqa.grid.common.exception.GridException;
 import org.openqa.grid.internal.ExternalSessionKey;
-import org.openqa.grid.internal.Registry;
+import org.openqa.grid.internal.GridRegistry;
 import org.openqa.grid.internal.RemoteProxy;
 import org.openqa.grid.internal.TestSession;
+import org.openqa.selenium.json.Json;
+import org.openqa.selenium.json.JsonException;
+import org.openqa.selenium.json.JsonInput;
+import org.openqa.selenium.json.JsonOutput;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.Reader;
+import java.io.Writer;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.TreeMap;
 
-import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 public class TestSessionStatusServlet extends RegistryBasedServlet {
 
-  private static final long serialVersionUID = 4325112892618707612L;
+  private final Json json = new Json();
 
   public TestSessionStatusServlet() {
     super(null);
   }
 
-  public TestSessionStatusServlet(Registry registry) {
+  public TestSessionStatusServlet(GridRegistry registry) {
     super(registry);
   }
 
   @Override
   protected void doGet(HttpServletRequest request, HttpServletResponse response)
-      throws ServletException, IOException {
-    process(request, response);
+      throws IOException {
+    Map<String, Object> json = ImmutableMap.of(
+        "session", request.getParameter("session"));
+    process(response, json);
   }
 
   @Override
   protected void doPost(HttpServletRequest request, HttpServletResponse response)
-      throws ServletException, IOException {
-    process(request, response);
+      throws IOException {
+    Map<String, Object> requestJSON = new HashMap<>();
+    if (request.getInputStream() != null) {
+      try (Reader rd = new BufferedReader(new InputStreamReader(request.getInputStream()));
+           JsonInput jin = json.newInput(rd)) {
+        requestJSON = jin.read(MAP_TYPE);
+      }
+    }
+    process(response, requestJSON);
   }
 
-  protected void process(HttpServletRequest request, HttpServletResponse response)
+  protected void process(HttpServletResponse response, Map<String, Object> requestJson)
       throws IOException {
     response.setContentType("application/json");
     response.setCharacterEncoding("UTF-8");
     response.setStatus(200);
-    JsonObject res;
-    try {
-      res = getResponse(request);
-      response.getWriter().print(res);
-      response.getWriter().close();
-    } catch (JsonSyntaxException e) {
+    try (Writer writer = response.getWriter();
+         JsonOutput out = json.newOutput(writer)) {
+      out.write(getResponse(requestJson));
+    } catch (JsonException e) {
       throw new GridException(e.getMessage());
     }
   }
 
-  private JsonObject getResponse(HttpServletRequest request) throws IOException {
-    JsonObject requestJSON = null;
-    if (request.getInputStream() != null) {
-      BufferedReader rd = new BufferedReader(new InputStreamReader(request.getInputStream()));
-      StringBuilder s = new StringBuilder();
-      String line;
-      while ((line = rd.readLine()) != null) {
-        s.append(line);
-      }
-      rd.close();
-      String json = s.toString();
-      if (!"".equals(json)) {
-        requestJSON = new JsonParser().parse(json).getAsJsonObject();
-      }
-
-    }
-
-    JsonObject res = new JsonObject();
-    res.addProperty("success", false);
+  private Map<String, Object> getResponse(Map<String, Object> requestJson) {
+    Map<String, Object> res = new TreeMap<>();
+    res.put("success", false);
 
     // the id can be specified via a param, or in the json request.
     String session;
-    if (requestJSON == null) {
-      session = request.getParameter("session");
-    } else {
-      if (!requestJSON.has("session")) {
-        res.addProperty("msg",
-            "you need to specify at least a session or internalKey when call the test slot status service.");
-        return res;
-      }
-      session = requestJSON.get("session").getAsString();
+    if (!requestJson.containsKey("session")) {
+      res.put(
+          "msg",
+          "you need to specify at least a session or internalKey when call the test slot status service.");
+      return res;
     }
+      session = String.valueOf(requestJson.get("session"));
 
     TestSession testSession = getRegistry().getSession(ExternalSessionKey.fromString(session));
 
     if (testSession == null) {
-      res.addProperty("msg", "Cannot find test slot running session " + session + " in the registry.");
+      res.put("msg", "Cannot find test slot running session " + session + " in the registry.");
       return res;
     }
-    res.addProperty("msg", "slot found !");
+    res.put("msg", "slot found !");
     res.remove("success");
-    res.addProperty("success", true);
-    res.addProperty("session", testSession.getExternalKey().getKey());
-    res.addProperty("internalKey", testSession.getInternalKey());
-    res.addProperty("inactivityTime", testSession.getInactivityTime());
+    res.put("success", true);
+    res.put("session", testSession.getExternalKey().getKey());
+    res.put("internalKey", testSession.getInternalKey());
+    res.put("inactivityTime", testSession.getInactivityTime());
     RemoteProxy p = testSession.getSlot().getProxy();
-    res.addProperty("proxyId", p.getId());
+    res.put("proxyId", p.getId());
     return res;
   }
-
 }

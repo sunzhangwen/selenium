@@ -1,5 +1,3 @@
-# encoding: utf-8
-#
 # Licensed to the Software Freedom Conservancy (SFC) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -46,6 +44,15 @@ module Selenium
           define_method "#{key}=" do |value|
             @capabilities[key] = value
           end
+        end
+
+        #
+        # Returns javascript_enabled capability.
+        # It is true if not set explicitly.
+        #
+        def javascript_enabled
+          javascript_enabled = @capabilities.fetch(:javascript_enabled)
+          javascript_enabled.nil? ? true : javascript_enabled
         end
 
         alias_method :css_selectors_enabled?, :css_selectors_enabled
@@ -111,6 +118,7 @@ module Selenium
           alias_method :ie, :internet_explorer
 
           def phantomjs(opts = {})
+            WebDriver.logger.deprecate 'Selenium support for PhantomJS', 'headless Chrome/Firefox or HTMLUnit'
             new({
               browser_name: 'phantomjs',
               javascript_enabled: true,
@@ -139,7 +147,7 @@ module Selenium
             caps = new
             caps.browser_name          = data.delete('browserName')
             caps.version               = data.delete('version')
-            caps.platform              = data.delete('platform').downcase.to_sym if data.key?('platform')
+            caps.platform              = data.delete('platform').downcase.tr(' ', '_').to_sym if data.key?('platform')
             caps.javascript_enabled    = data.delete('javascriptEnabled')
             caps.css_selectors_enabled = data.delete('cssSelectorsEnabled')
             caps.takes_screenshot      = data.delete('takesScreenshot')
@@ -154,6 +162,7 @@ module Selenium
           end
         end
 
+        #
         # @option :browser_name           [String] required browser name
         # @option :version                [String] required browser version number
         # @option :platform               [Symbol] one of :any, :win, :mac, or :x
@@ -208,6 +217,7 @@ module Selenium
           end
         end
 
+        #
         # @api private
         #
 

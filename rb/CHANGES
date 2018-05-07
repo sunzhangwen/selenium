@@ -1,3 +1,264 @@
+3.11.0 (2018-03-11)
+===================
+
+Ruby:
+  * No changes in Ruby bindings for this release
+
+3.10.0 (2018-03-02)
+===================
+
+Ruby:
+  * Added Errno::EAFNOSUPPORT to the list of ignored errors when finding port (thanks @jtarchie)
+  * Added automatic conversion of noProxy to the list of strings as required
+    by W3C WebDriver Specification (issue #5004)
+
+Chrome:
+  * Added Chrome::Options#headless! shortcut to enable headless mode (thanks @pulkitsharma07)
+
+IE:
+  * Added support for getting local storage using Driver#local_storage
+  * Added support for getting session storage using Driver#session_storage
+
+3.9.0 (2018-02-06)
+==================
+
+Ruby:
+  * Fixed a bug when omitted capabilities caused NoMethodError (issue #5185)
+  * Fixed a bug when getting page source in W3C dialect caused WebDriverError (thanks @KazuCocoa)
+  * Fixed a bug when getting backtrace of server error would case NoMethodError (thanks @mcking49)
+  * Updated YARD to ~> 0.9.11
+  * Updated rubyzip to ~> 1.2 (thanks @michaelglass)
+
+Chrome:
+  * Added support for getting network conditions via Driver#network_conditions
+  * Added support for setting network conditions via Driver#network_conditions=
+  * Added support to allow driver respond with custom error codes (issue #5376)
+
+Firefox:
+  * Improved GeckoDriver binary lookup mechanism (issue #5240)
+
+3.8.0 (2017-12-01)
+==================
+
+Ruby:
+  * Removed deprecated Alert#authenticate
+  * Removed deprecated :port initialization argument of Remote::Bridge.
+    Use :url instead.
+  * Removed deprecated Selenium::WebDriver::Remote::W3CCapabilities.
+    Use Selenium::WebDriver::Remote::Capabilities instead.
+
+IE:
+  * Remove deprecated :log_file driver initialization argument.
+    Use driver_opts: {log_file: ''} instead.
+  * Remove deprecated :log_level driver initialization argument.
+    Use driver_opts: {log_level: ''} instead.
+  * Remove deprecated :implementation driver initialization argument.
+    Use driver_opts: {implementation: ''} instead.
+  * Removed deprecated :service_args driver initialization argument.
+    Use driver_opts: {args: ['--some-switch']} instead.
+
+Chrome:
+  * Removed deprecated :service_log_path driver initialization argument.
+    Use driver_opts: {log_path: 'path'} instead.
+  * Removed deprecated :service_args driver initialization argument.
+    Use driver_opts: {args: ['--some-switch']} instead.
+
+Firefox:
+  * Removed deprecated :service_args driver initialization argument.
+    Use driver_opts: {args: ['--some-switch']} instead.
+
+Safari:
+  * Removed deprecated :service_args driver initialization argument.
+    Use driver_opts: {args: ['--some-switch']} instead.
+
+Edge:
+  * Removed deprecated :service_args driver initialization argument.
+    Use driver_opts: {args: ['--some-switch']} instead.
+
+3.7.0 (2017-11-03)
+==================
+
+Ruby:
+  * Added //rb:lint task to check codebase using RuboCop (thanks @RustyNail)
+  * Fixed codebase to comply more to Ruby community style guide (thanks @RustyNail)
+  * Packaged all dependencies to Selenium repository so that non-Ruby committers
+    can build and test Ruby bindings easier
+  * Update errors list according to latest changes of specification (thanks @jaysonesmith)
+
+Firefox:
+  * Added Firefox::Options#headless! shortcut to enable headless mode (thanks @franzliedke)
+
+3.6.0 (2017-09-25)
+==================
+
+Edge:
+  * Fixed a bug when execute_script failed using server + Edge (issue #4651)
+
+Firefox:
+  * Fixed a bug when web extension failed to install using profile class (issue #4093)
+
+PhantomJS:
+  * Support is deprecated in favor of headless Chrome/Firefox or HTMLUnit.
+    PhantomJS is no longer actively developed, and support will eventually
+    be dropped.
+
+3.5.2 (2017-09-07)
+==================
+
+Ruby:
+  * Removed platformVersion from W3C payload (issue #4641)
+  * Fixed a bug when proxy type was not compliant to specification (issue #4574)
+  * Added support for passing speed to flick action (issue #4549)
+  * Using TouchActionBuilder no longer prints mouse/key deprecations
+  * Deprecated Alert#authenticate
+  * Added support for DEBUG environment variable which enables full debug mode in gem
+
+Firefox:
+  * Fixed a bug when page load timeout was not properly constructed in new session payload
+  * Fixed a bug when GeckoDriver error stacktrace was not displayed (issue #3683)
+
+Chrome:
+  * Added workaround for the case when findElements call returns null (issue #4555)
+  * Chrome::Driver now includes touch actions by default
+
+3.5.1 (2017-08-15)
+==================
+
+Ruby:
+  * Fixed a bug when Chrome/Firefox (and probably other) drivers could not be
+    started on JRuby (issue #4453).
+
+3.5.0 (2017-08-10)
+==================
+
+Firefox:
+  * Firefox subprocess output is now only redirected when debug is set (issue #4311)
+  * Fixed a bug where non-integers could be sent when setting window rect
+  * Fixed Firefox location detection on Windows_x64 (thanks kamenlitchev)
+  * Fixed passing of profile with a W3C compatible remote end
+
+IE:
+  * Added new IE::Options class that should be used to customize browser
+    behavior (native events, element scroll behavior, etc).
+    The instance of options class can be passed to driver initialization using
+    :options key. Old way of passing these customization directly to driver
+    initialization is deprecated.
+
+3.4.4 (2017-07-13)
+==================
+
+Firefox:
+  * Added support for GeckoDriver install addon command (issue 4215).
+  * Added support for GeckoDriver uninstall addon command (issue 4215).
+  * Raise error when passing :firefox_options as capability.
+
+Ruby:
+  * Fixed a bug when childprocess were leaking /dev/null file descriptor (issue 4285).
+  * Make Remote::Driver class so that it can be inherited from.
+
+3.4.3 (2017-06-16)
+==================
+
+Ruby:
+  * Fixed a regression when passing symbol as :desired_capabilities caused NoMethodError (issue 4187).
+
+3.4.2 (2017-06-14)
+==================
+
+Ruby:
+  * Added unhandledPromptBehavior to the list of known capabilities.
+  * Added timeouts to the list of known capabilities.
+  * Fixed a regression when passing hash as :desired_capabilities caused NoMethodError (issue 4172, thanks Thomas Walpole).
+  * Fixed a regression when extension capabilities (the ones that have ":" inside)
+    were filtered out when doing protocol handshake.
+  * Improved handling of capability names passed as plain camelCased strings
+    vs Rubyish snake_cased symbols when doing protocol handshake.
+
+Chrome:
+  * Fixed a regression when passing :switches to driver initialization was ignored.
+
+3.4.1 (2017-06-13)
+==================
+
+Ruby:
+  * Implemented a new dual-dialect mechanism for communication with drivers
+    (a.k.a. protocol handshake). There shouldn't be any noticeable differences
+    but since this is a significant refactoring of internal APIs, some bugs
+    could slip into the release.
+  * Renamed ElementClickIntercepted to ElementClickInterceptedError.
+  * Renamed ElementNotInteractable to ElementNotInteractableError.
+  * Deprecated W3CCapabilities in favor of Capabilities (it was meant to be private API).
+  * Added a warning when trying to save screenshot without .png extension (thanks @abotalov).
+
+IE:
+  * Added support for both old IEDriver which uses OSS dialect of JSON wire
+    protocol (<= 3.4.0) and new IEDriver which uses W3C dialect (not yet released).
+
+Safari:
+  * Removed runtime dependencies used for old SafariDriver (u.g. websocket).
+
+Chrome:
+  * Added new Chrome::Options class that should be used to customize browser
+    behavior (command line arguments, extensions, preferences, mobile emulation, etc.).
+    The instance of options class can be passed to driver initialization using
+    :options key. Old way of passing these customization directly to driver
+    initialization is deprecated.
+
+Firefox:
+  * Added new Firefox::Options class that should be used to customize browser
+    behavior (command line arguments, profile, preferences, Firefox binary, etc.).
+    The instance of options class can be passed to driver initialization using
+    :options key. Old way of passing these customization directly to driver
+    initialization is deprecated.
+
+3.4.0 (2017-04-21)
+===================
+
+Edge:
+  * Fix bug when response is not wrapped with "value"
+
+Firefox:
+  * Support geckodriver v0.16
+
+Ruby:
+  * Support ElementClickIntercepted error from W3C spec
+  * Support ElementNotInteractable error from W3C spec
+  * Implement window rect commands
+  * Implement window minimize command
+
+3.3.0 (2017-03-07)
+===================
+
+Firefox:
+  * geckodriver v0.15 or later is required
+
+W3C:
+  * Support for command response data to be wrapped in a 'value' key
+  * Support for updated timeout formats
+
+3.2.2 (2017-03-01)
+===================
+
+Ruby:
+  * Fix bug for supporting Logger output on Ruby versions < 2.3
+  * Add more logging and adjust output levels
+
+Remote:
+  * Support for creating Remote session with browser name and url parameters
+
+3.2.1 (2017-02-24)
+===================
+
+Ruby:
+  * Fix bug for supporting Logger on Ruby versions < 2.3
+
+3.2.0 (2017-02-22)
+===================
+
+Ruby:
+  * Implement new Logger class
+  * Fix issue with chromedriver process leader incompatibility on Win7 (issue 3512)
+
 3.1.0 (2017-02-14)
 ===================
 

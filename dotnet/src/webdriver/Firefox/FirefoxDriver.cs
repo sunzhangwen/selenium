@@ -1,4 +1,4 @@
-﻿// <copyright file="FirefoxDriver.cs" company="WebDriver Committers">
+// <copyright file="FirefoxDriver.cs" company="WebDriver Committers">
 // Licensed to the Software Freedom Conservancy (SFC) under one
 // or more contributor license agreements. See the NOTICE file
 // distributed with this work for additional information
@@ -102,7 +102,7 @@ namespace OpenQA.Selenium.Firefox
         /// Initializes a new instance of the <see cref="FirefoxDriver"/> class.
         /// </summary>
         public FirefoxDriver()
-            : this(new FirefoxOptions(null, null))
+            : this(new FirefoxOptions(null, null, null))
         {
         }
 
@@ -111,8 +111,9 @@ namespace OpenQA.Selenium.Firefox
         /// </summary>
         /// <param name="profile">A <see cref="FirefoxProfile"/> object representing the profile settings
         /// to be used in starting Firefox.</param>
+        [Obsolete("FirefoxDriver should not be constructed with a FirefoxProfile object. Use FirefoxOptions instead. This constructor will be removed in a future release.")]
         public FirefoxDriver(FirefoxProfile profile)
-            : this(new FirefoxOptions(profile, null))
+            : this(new FirefoxOptions(profile, null, null))
         {
         }
 
@@ -136,7 +137,7 @@ namespace OpenQA.Selenium.Firefox
         /// to be used in starting Firefox.</param>
         [Obsolete("FirefoxDriver should not be constructed with a FirefoxBinary object. Use FirefoxOptions instead. This constructor will be removed in a future release.")]
         public FirefoxDriver(FirefoxBinary binary, FirefoxProfile profile)
-            : this(new FirefoxOptions(profile, binary))
+            : this(new FirefoxOptions(profile, binary, null))
         {
         }
 
@@ -150,7 +151,7 @@ namespace OpenQA.Selenium.Firefox
         /// <param name="commandTimeout">The maximum amount of time to wait for each command.</param>
         [Obsolete("FirefoxDriver should not be constructed  with a FirefoxBinary object. Use FirefoxOptions instead. This constructor will be removed in a future release.")]
         public FirefoxDriver(FirefoxBinary binary, FirefoxProfile profile, TimeSpan commandTimeout)
-            : this(null, new FirefoxOptions(profile, binary), commandTimeout)
+            : this((FirefoxDriverService)null, new FirefoxOptions(profile, binary, null), commandTimeout)
         {
         }
 
@@ -159,7 +160,7 @@ namespace OpenQA.Selenium.Firefox
         /// </summary>
         /// <param name="options">The <see cref="FirefoxOptions"/> to be used with the Firefox driver.</param>
         public FirefoxDriver(FirefoxOptions options)
-            : this(FirefoxDriverService.CreateDefaultService(), options, RemoteWebDriver.DefaultCommandTimeout)
+            : this(CreateService(options), options, RemoteWebDriver.DefaultCommandTimeout)
         {
         }
 
@@ -169,6 +170,39 @@ namespace OpenQA.Selenium.Firefox
         /// <param name="service">The <see cref="FirefoxDriverService"/> used to initialize the driver.</param>
         public FirefoxDriver(FirefoxDriverService service)
             : this(service, new FirefoxOptions(), RemoteWebDriver.DefaultCommandTimeout)
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="FirefoxDriver"/> class using the specified path
+        /// to the directory containing geckodriver.exe.
+        /// </summary>
+        /// <param name="geckoDriverDirectory">The full path to the directory containing geckodriver.exe.</param>
+        public FirefoxDriver(string geckoDriverDirectory)
+            : this(geckoDriverDirectory, new FirefoxOptions())
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="FirefoxDriver"/> class using the specified path
+        /// to the directory containing geckodriver.exe and options.
+        /// </summary>
+        /// <param name="geckoDriverDirectory">The full path to the directory containing geckodriver.exe.</param>
+        /// <param name="options">The <see cref="FirefoxOptions"/> to be used with the Firefox driver.</param>
+        public FirefoxDriver(string geckoDriverDirectory, FirefoxOptions options)
+            : this(geckoDriverDirectory, options, RemoteWebDriver.DefaultCommandTimeout)
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="FirefoxDriver"/> class using the specified path
+        /// to the directory containing geckodriver.exe, options, and command timeout.
+        /// </summary>
+        /// <param name="geckoDriverDirectory">The full path to the directory containing geckodriver.exe.</param>
+        /// <param name="options">The <see cref="FirefoxOptions"/> to be used with the Firefox driver.</param>
+        /// <param name="commandTimeout">The maximum amount of time to wait for each command.</param>
+        public FirefoxDriver(string geckoDriverDirectory, FirefoxOptions options, TimeSpan commandTimeout)
+            : this(FirefoxDriverService.CreateDefaultService(geckoDriverDirectory), options, commandTimeout)
         {
         }
 
@@ -216,16 +250,6 @@ namespace OpenQA.Selenium.Firefox
         protected virtual void PrepareEnvironment()
         {
             // Does nothing, but provides a hook for subclasses to do "stuff"
-        }
-
-        /// <summary>
-        /// Creates a <see cref="RemoteWebElement"/> with the specified ID.
-        /// </summary>
-        /// <param name="elementId">The ID of this element.</param>
-        /// <returns>A <see cref="RemoteWebElement"/> with the specified ID. For the FirefoxDriver this will be a <see cref="FirefoxWebElement"/>.</returns>
-        protected override RemoteWebElement CreateElement(string elementId)
-        {
-            return new FirefoxWebElement(this, elementId);
         }
 
         private static ICommandExecutor CreateExecutor(FirefoxDriverService service, FirefoxOptions options, TimeSpan commandTimeout)
@@ -307,16 +331,7 @@ namespace OpenQA.Selenium.Firefox
             FirefoxProfile profile = ExtractProfile(capabilities);
             DesiredCapabilities desiredCaps = RemoveUnneededCapabilities(capabilities) as DesiredCapabilities;
 
-            FirefoxOptions options = new FirefoxOptions(profile, binary);
-            if (desiredCaps != null)
-            {
-                Dictionary<string, object> capsDictionary = desiredCaps.ToDictionary();
-                foreach (KeyValuePair<string, object> capability in capsDictionary)
-                {
-                    options.AddAdditionalCapability(capability.Key, capability.Value);
-                }
-            }
-
+            FirefoxOptions options = new FirefoxOptions(profile, binary, desiredCaps);
             return options;
         }
 
@@ -381,6 +396,16 @@ namespace OpenQA.Selenium.Firefox
             }
 
             return profile;
+        }
+
+        private static FirefoxDriverService CreateService(FirefoxOptions options)
+        {
+            if (options != null && options.UseLegacyImplementation)
+            {
+                return null;
+            }
+
+            return FirefoxDriverService.CreateDefaultService();
         }
     }
 }

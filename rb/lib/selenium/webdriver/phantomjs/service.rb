@@ -1,5 +1,3 @@
-# encoding: utf-8
-#
 # Licensed to the Software Freedom Conservancy (SFC) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -32,9 +30,7 @@ module Selenium
         private
 
         def start_process
-          server_command = [@executable_path, "--webdriver=#{@port}", *@extra_args]
-          @process = ChildProcess.build(*server_command.compact)
-          @process.io.stdout = @process.io.stderr = WebDriver.logger.io
+          @process = build_process(@executable_path, "--webdriver=#{@port}", *@extra_args)
           @process.start
         end
 

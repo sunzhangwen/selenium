@@ -26,12 +26,18 @@
 #pragma warning (disable: 6387)
 
 #include "Element.h"
+
 #include <algorithm>
+
+#include "errorcodes.h"
+#include "logging.h"
+#include "json.h"
+
 #include "Browser.h"
 #include "Generated/atoms.h"
-#include "json.h"
-#include "logging.h"
 #include "Script.h"
+#include "StringUtilities.h"
+#include "VariantUtilities.h"
 
 namespace webdriver {
 
@@ -64,7 +70,12 @@ Element::Element(IHTMLElement* element, HWND containing_window_handle) {
 
   this->element_ = element;
   this->containing_window_handle_ = containing_window_handle;
-  this->last_click_time_ = 0;
+}
+
+Element::Element(IHTMLElement* element, HWND containing_window_handle, const std::string& element_id) {
+  this->element_ = element;
+  this->element_id_ = element_id;
+  this->containing_window_handle_ = containing_window_handle;
 }
 
 Element::~Element(void) {
@@ -74,10 +85,7 @@ Json::Value Element::ConvertToJson() {
   LOG(TRACE) << "Entering Element::ConvertToJson";
 
   Json::Value json_wrapper;
-  // TODO: Remove the "ELEMENT" property once all target bindings 
-  // have been updated to use spec-compliant protocol.
-  json_wrapper["element-6066-11e4-a52e-4f735466cecf"] = this->element_id_;
-  json_wrapper["ELEMENT"] = this->element_id_;
+  json_wrapper[JSON_ELEMENT_PROPERTY_NAME] = this->element_id_;
 
   return json_wrapper;
 }
@@ -180,6 +188,156 @@ bool Element::IsInteractable() {
   return result;
 }
 
+bool Element::IsFocusable() {
+  LOG(TRACE) << "Entering Element::IsFocusable";
+
+  bool result = false;
+
+  CComPtr<IHTMLBodyElement> body;
+  HRESULT hr = this->element_->QueryInterface<IHTMLBodyElement>(&body);
+  if (SUCCEEDED(hr) && body) {
+    // The <body> element is explicitly focusable.
+    return true;
+  }
+
+  CComPtr<IHTMLDocument2> doc;
+  this->GetContainingDocument(false, &doc);
+
+  CComPtr<IHTMLDocument3> document_element_doc;
+  hr = doc->QueryInterface<IHTMLDocument3>(&document_element_doc);
+  if (SUCCEEDED(hr) && document_element_doc) {
+    CComPtr<IHTMLElement> doc_element;
+    hr = document_element_doc->get_documentElement(&doc_element);
+    if (SUCCEEDED(hr) && doc_element && this->element_.IsEqualObject(doc_element)) {
+      // The document's documentElement is explicitly focusable.
+      return true;
+    }
+  }
+
+  // The atom is just the definition of an anonymous
+  // function: "function() {...}"; Wrap it in another function so we can
+  // invoke it with our arguments without polluting the current namespace.
+  std::wstring script_source(L"(function() { return (");
+  script_source += atoms::asString(atoms::IS_FOCUSABLE);
+  script_source += L")})();";
+
+  
+  Script script_wrapper(doc, script_source, 1);
+  script_wrapper.AddArgument(this->element_);
+  int status_code = script_wrapper.Execute();
+
+  if (status_code == WD_SUCCESS) {
+    result = script_wrapper.result().boolVal == VARIANT_TRUE;
+  } else {
+    LOG(WARN) << "Failed to determine is element enabled";
+  }
+
+  return result;
+}
+
+bool Element::IsObscured(LocationInfo* click_location,
+                         std::string* obscuring_element_description) {
+  CComPtr<ISVGElement> svg_element;
+  HRESULT hr = this->element_->QueryInterface<ISVGElement>(&svg_element);
+  if (SUCCEEDED(hr) && svg_element != NULL) {
+    // SVG elements can have complex paths making them non-hierarchical
+    // when drawn. We'll just assume the user knows what they're doing
+    // and bail on this test here.
+    return false;
+  }
+
+  bool is_obscured = false;
+
+  CComPtr<IHTMLDocument2> doc;
+  this->GetContainingDocument(false, &doc);
+
+  std::vector<LocationInfo> frame_locations;
+  LocationInfo element_location = {};
+  int status_code = this->GetLocation(&element_location, &frame_locations);
+  bool document_contains_frames = frame_locations.size() != 0;
+  *click_location = this->CalculateClickPoint(element_location,
+                                              document_contains_frames);
+  long x = click_location->x;
+  long y = click_location->y;
+  if (document_contains_frames) {
+    // If the document contains frames, we'll need to do elementsFromPoint
+    // for the framed document, ignoring the frame offsets.
+    CComPtr<IHTMLElement2> rect_element;
+    this->element_->QueryInterface<IHTMLElement2>(&rect_element);
+    CComPtr<IHTMLRect> rect;
+    rect_element->getBoundingClientRect(&rect);
+    long top = 0, bottom = 0, left = 0, right = 0;
+
+    rect->get_top(&top);
+    rect->get_left(&left);
+    rect->get_bottom(&bottom);
+    rect->get_right(&right);
+
+    long width = right - left;
+    long height = bottom - top;
+
+    x = left + (width / 2);
+    y = top + (height / 2);
+  }
+
+  CComPtr<IHTMLDocument8> elements_doc;
+  hr = doc.QueryInterface<IHTMLDocument8>(&elements_doc);
+  if (FAILED(hr)) {
+    // If we failed to QI for IHTMLDocument8, we can't easily determine if
+    // the element is obscured or not. We will assume we are not obscured
+    // and bail, even though that may not be the case.
+    LOGHR(WARN, hr) << "QueryInterface for IHTMLDocument8 failed";
+    return false;
+  }
+
+  long top_most_element_index = -1;
+  CComPtr<IHTMLDOMChildrenCollection> elements_hit;
+  hr = elements_doc->elementsFromPoint(static_cast<float>(x),
+                                       static_cast<float>(y),
+                                       &elements_hit);
+  if (SUCCEEDED(hr) && elements_hit != NULL) {
+    long element_count;
+    elements_hit->get_length(&element_count);
+    for (long index = 0; index < element_count; ++index) {
+      CComPtr<IDispatch> dispatch_in_list;
+      elements_hit->item(index, &dispatch_in_list);
+
+      CComPtr<IHTMLElement> element_in_list;
+      hr = dispatch_in_list->QueryInterface<IHTMLElement>(&element_in_list);
+      bool are_equal = element_in_list.IsEqualObject(this->element_);
+      if (are_equal) {
+        break;
+      }
+
+      bool is_list_element_displayed;
+      Element element_wrapper(element_in_list,
+                                   this->containing_window_handle_);
+      status_code = element_wrapper.IsDisplayed(false,
+                                                &is_list_element_displayed);
+      if (is_list_element_displayed) {
+        VARIANT_BOOL is_child;
+        hr = this->element_->contains(element_in_list, &is_child);
+        VARIANT_BOOL is_ancestor;
+        hr = element_in_list->contains(this->element_, &is_ancestor);
+        is_obscured = is_child != VARIANT_TRUE && is_ancestor != VARIANT_TRUE;
+        if (is_obscured) {
+          // Return the top-most element in the event we find an obscuring
+          // element in the tree between this element and the top-most one.
+          // Note that since it's the top-most element, it will have no
+          // descendants, so its outerHTML property will contain only itself.
+          CComBSTR outer_html_bstr;
+          hr = element_in_list->get_outerHTML(&outer_html_bstr);
+          std::wstring outer_html = outer_html_bstr;
+          *obscuring_element_description = StringUtilities::ToString(outer_html);
+          break;
+        }
+      }
+    }
+  }
+
+  return is_obscured;
+}
+
 bool Element::IsEditable() {
   LOG(TRACE) << "Entering Element::IsEditable";
 
@@ -207,7 +365,7 @@ bool Element::IsEditable() {
   return result;
 }
 
-int Element::GetClickLocation(const ELEMENT_SCROLL_BEHAVIOR scroll_behavior,
+int Element::GetClickLocation(const ElementScrollBehavior scroll_behavior,
                               LocationInfo* element_location,
                               LocationInfo* click_location) {
   LOG(TRACE) << "Entering Element::GetClickLocation";
@@ -237,9 +395,17 @@ int Element::GetClickLocation(const ELEMENT_SCROLL_BEHAVIOR scroll_behavior,
   return status_code;
 }
 
+int Element::GetStaticClickLocation(LocationInfo* click_location) {
+  std::vector<LocationInfo> frame_locations;
+  LocationInfo element_location = {};
+  int result = this->GetLocation(&element_location, &frame_locations);
+  bool document_contains_frames = frame_locations.size() != 0;
+  *click_location = this->CalculateClickPoint(element_location, document_contains_frames);
+  return result;
+}
+
 int Element::GetAttributeValue(const std::string& attribute_name,
-                               std::string* attribute_value,
-                               bool* value_is_null) {
+                               VARIANT* attribute_value) {
   LOG(TRACE) << "Entering Element::GetAttributeValue";
 
   std::wstring wide_attribute_name = StringUtilities::ToWString(attribute_name);
@@ -260,9 +426,50 @@ int Element::GetAttributeValue(const std::string& attribute_name,
   status_code = script_wrapper.Execute();
   
   if (status_code == WD_SUCCESS) {
-    *value_is_null = !script_wrapper.ConvertResultToString(attribute_value);
+    *attribute_value = script_wrapper.result();
   } else {
     LOG(WARN) << "Failed to determine element attribute";
+  }
+
+  return WD_SUCCESS;
+}
+
+int Element::GetPropertyValue(const std::string& property_name,
+                              VARIANT* property_value) {
+  LOG(TRACE) << "Entering Element::GetPropertyValue";
+
+  std::wstring wide_property_name = StringUtilities::ToWString(property_name);
+  int status_code = WD_SUCCESS;
+
+  LPOLESTR property_name_pointer = reinterpret_cast<LPOLESTR>(const_cast<wchar_t*>(wide_property_name.data()));
+  DISPID dispid_property;
+  HRESULT hr = this->element_->GetIDsOfNames(IID_NULL,
+                                             &property_name_pointer,
+                                             1,
+                                             LOCALE_USER_DEFAULT,
+                                             &dispid_property);
+  if (FAILED(hr)) {
+    LOGHR(WARN, hr) << "Unable to get dispatch ID (dispid) for property "
+                    << property_name;
+    property_value->vt = VT_EMPTY;
+    return WD_SUCCESS;
+  }
+
+  // get the value of eval result
+  DISPPARAMS no_args_dispatch_parameters = { 0 };
+  hr = this->element_->Invoke(dispid_property,
+                              IID_NULL,
+                              LOCALE_USER_DEFAULT,
+                              DISPATCH_PROPERTYGET,
+                              &no_args_dispatch_parameters,
+                              property_value,
+                              NULL,
+                              NULL);
+  if (FAILED(hr)) {
+    LOGHR(WARN, hr) << "Unable to get result for property "
+                    << property_name;
+    property_value->vt = VT_EMPTY;
+    return WD_SUCCESS;
   }
 
   return WD_SUCCESS;
@@ -288,20 +495,20 @@ int Element::GetCssPropertyValue(const std::string& property_name,
   status_code = script_wrapper.Execute();
 
   if (status_code == WD_SUCCESS) {
-    std::string raw_value = "";
-    script_wrapper.ConvertResultToString(&raw_value);
+    std::wstring raw_value(script_wrapper.result().bstrVal);
+    std::string value = StringUtilities::ToString(raw_value);
     std::transform(raw_value.begin(),
-                    raw_value.end(),
-                    raw_value.begin(),
-                    tolower);
-    *property_value = raw_value;
+                   raw_value.end(),
+                   raw_value.begin(),
+                   tolower);
+    *property_value = value;
   } else {
     LOG(WARN) << "Failed to get value of CSS property";
   }
   return status_code;
 }
 
-int Element::GetLocationOnceScrolledIntoView(const ELEMENT_SCROLL_BEHAVIOR scroll,
+int Element::GetLocationOnceScrolledIntoView(const ElementScrollBehavior scroll,
                                              LocationInfo* location,
                                              std::vector<LocationInfo>* frame_locations) {
   LOG(TRACE) << "Entering Element::GetLocationOnceScrolledIntoView";
@@ -385,8 +592,8 @@ bool Element::IsHiddenByOverflow() {
   script_wrapper.AddArgument(this->element_);
   int status_code = script_wrapper.Execute();
   if (status_code == WD_SUCCESS) {
-    std::string overflow_state = "";
-    script_wrapper.ConvertResultToString(&overflow_state);
+    std::wstring raw_overflow_state(script_wrapper.result().bstrVal);
+    std::string overflow_state = StringUtilities::ToString(raw_overflow_state);
     isOverflow = (overflow_state == "scroll");
   } else {
     LOG(WARN) << "Unable to determine is element hidden by overflow";
@@ -395,7 +602,8 @@ bool Element::IsHiddenByOverflow() {
   return isOverflow;
 }
 
-bool Element::IsLocationVisibleInFrames(const LocationInfo location, const std::vector<LocationInfo> frame_locations) {
+bool Element::IsLocationVisibleInFrames(const LocationInfo location,
+                                        const std::vector<LocationInfo> frame_locations) {
   std::vector<LocationInfo>::const_iterator iterator = frame_locations.begin();
   for (; iterator != frame_locations.end(); ++iterator) {
     if (location.x < iterator->x || 
@@ -808,11 +1016,13 @@ bool Element::GetClickableViewPortLocation(const bool document_contains_frames, 
     CComPtr<IHTMLDocument2> doc;
     this->GetContainingDocument(false, &doc);
     int document_mode = DocumentHost::GetDocumentMode(doc);
-    CComPtr<IHTMLDocument3> document_element_doc;
+    CComPtr<IHTMLDocument3> document_element_doc;		
+    CComPtr<IHTMLElement> document_element;
     HRESULT hr = doc->QueryInterface<IHTMLDocument3>(&document_element_doc);
-    if (SUCCEEDED(hr) && document_element_doc && document_mode > 5) {
-      CComPtr<IHTMLElement> document_element;
+    if (SUCCEEDED(hr) && document_element_doc) { 
       hr = document_element_doc->get_documentElement(&document_element);
+    }
+    if (SUCCEEDED(hr) && document_mode > 5 && document_element) {
       CComPtr<IHTMLElement2> size_element;
       hr = document_element->QueryInterface<IHTMLElement2>(&size_element);
       size_element->get_clientHeight(&window_height);
@@ -1029,6 +1239,18 @@ bool Element::IsAttachedToDom() {
         return contains == VARIANT_TRUE;
       }
     }
+  }
+  return false;
+}
+
+bool Element::IsDocumentFocused(IHTMLDocument2* focused_doc) {
+  CComPtr<IDispatch> parent_doc_dispatch;
+  this->element_->get_document(&parent_doc_dispatch);
+
+  if (parent_doc_dispatch.IsEqualObject(focused_doc)) {
+    return true;
+  } else {
+    LOG(WARN) << "Found managed element's document is not currently focused";
   }
   return false;
 }

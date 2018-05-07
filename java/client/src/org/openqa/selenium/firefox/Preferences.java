@@ -19,25 +19,25 @@ package org.openqa.selenium.firefox;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static org.openqa.selenium.json.Json.MAP_TYPE;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.Maps;
 import com.google.common.io.CharStreams;
 import com.google.common.io.Closeables;
 import com.google.common.io.LineReader;
 
 import org.openqa.selenium.WebDriverException;
-import org.openqa.selenium.remote.JsonToBeanConverter;
+import org.openqa.selenium.json.Json;
 
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 
 class Preferences {
 
@@ -59,8 +59,8 @@ class Preferences {
   private static final Pattern PREFERENCE_PATTERN =
       Pattern.compile("user_pref\\(\"([^\"]+)\", (\"?.+?\"?)\\);");
 
-  private Map<String, Object> immutablePrefs = Maps.newHashMap();
-  private Map<String, Object> allPrefs = Maps.newHashMap();
+  private Map<String, Object> immutablePrefs = new HashMap<>();
+  private Map<String, Object> allPrefs = new HashMap<>();
 
   public Preferences(Reader defaults) {
     readDefaultPreferences(defaults);
@@ -85,7 +85,7 @@ class Preferences {
     } finally {
       try {
         Closeables.close(reader, true);
-      } catch (IOException ignoted) {
+      } catch (IOException ignored) {
       }
     }
   }
@@ -93,7 +93,7 @@ class Preferences {
   private void readDefaultPreferences(Reader defaultsReader) {
     try {
       String rawJson = CharStreams.toString(defaultsReader);
-      Map<String, Object> map = new JsonToBeanConverter().convert(Map.class, rawJson);
+      Map<String, Object> map = new Json().toType(rawJson, MAP_TYPE);
 
       Map<String, Object> frozen = (Map<String, Object>) map.get("frozen");
       for (Map.Entry<String, Object> entry : frozen.entrySet()) {

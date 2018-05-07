@@ -39,13 +39,14 @@ import org.openqa.selenium.internal.FindsByName;
 import org.openqa.selenium.internal.FindsByTagName;
 import org.openqa.selenium.internal.FindsByXPath;
 import org.openqa.selenium.internal.HasIdentity;
-import org.openqa.selenium.internal.Locatable;
+import org.openqa.selenium.interactions.internal.Locatable;
 import org.openqa.selenium.internal.WrapsDriver;
 import org.openqa.selenium.internal.WrapsElement;
 import org.openqa.selenium.io.Zip;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -56,7 +57,6 @@ public class RemoteWebElement implements WebElement, FindsByLinkText, FindsById,
   private String foundBy;
   protected String id;
   protected RemoteWebDriver parent;
-  protected RemoteMouse mouse;
   protected FileDetector fileDetector;
 
   protected void setFoundBy(SearchContext foundFrom, String locator, String term) {
@@ -65,7 +65,6 @@ public class RemoteWebElement implements WebElement, FindsByLinkText, FindsById,
 
   public void setParent(RemoteWebDriver parent) {
     this.parent = parent;
-    mouse = (RemoteMouse) parent.getMouse();
   }
 
   public String getId() {
@@ -89,6 +88,9 @@ public class RemoteWebElement implements WebElement, FindsByLinkText, FindsById,
   }
 
   public void sendKeys(CharSequence... keysToSend) {
+    if (keysToSend == null) {
+      throw new IllegalArgumentException("Keys to send should be a not null CharSequence");
+    }
     File localFile = fileDetector.getLocalFile(keysToSend);
     if (localFile != null) {
       String remotePath = upload(localFile);
@@ -193,16 +195,16 @@ public class RemoteWebElement implements WebElement, FindsByLinkText, FindsById,
     Response response = execute(DriverCommand.FIND_CHILD_ELEMENTS,
                                 ImmutableMap.of("id", id, "using", using, "value", value));
     Object responseValue = response.getValue();
+    if (responseValue == null) { // see https://github.com/SeleniumHQ/selenium/issues/4555
+      return Collections.emptyList();
+    }
     List<WebElement> allElements;
     try {
       allElements = (List<WebElement>) responseValue;
     } catch (ClassCastException ex) {
       throw new WebDriverException("Returned value cannot be converted to List<WebElement>: " + responseValue, ex);
     }
-    for (WebElement element : allElements) {
-      parent.setFoundBy(this, element, using, value);
-    }
-
+    allElements.forEach(element -> parent.setFoundBy(this, element, using, value));
     return allElements;
   }
 

@@ -18,12 +18,14 @@
 package org.openqa.selenium.remote;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThat;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
+import org.hamcrest.CoreMatchers;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -35,6 +37,7 @@ import org.openqa.selenium.logging.LocalLogs;
 import org.openqa.selenium.logging.LogEntries;
 import org.openqa.selenium.logging.LogEntry;
 import org.openqa.selenium.logging.LogType;
+import org.openqa.selenium.testing.TestUtilities;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -122,6 +125,22 @@ public class RemoteLogsTest {
     assertEquals("world", logEntries.getAll().get(0).getMessage());
 
     // Server logs should not retrieve local logs.
+    verifyNoMoreInteractions(localLogs);
+  }
+
+  @Test
+  public void throwsOnBogusRemoteLogsResponse() {
+    when(
+        executeMethod
+            .execute(DriverCommand.GET_LOG, ImmutableMap.of(RemoteLogs.TYPE_KEY, LogType.BROWSER)))
+        .thenReturn(new ImmutableMap.Builder<>()
+                        .put("error", "unknown method")
+                        .put("message", "Command not found: POST /session/11037/log")
+                        .put("stacktrace", "").build());
+
+    Throwable ex = TestUtilities.catchThrowable(() -> remoteLogs.get(LogType.BROWSER));
+    assertThat(ex, CoreMatchers.instanceOf(WebDriverException.class));
+
     verifyNoMoreInteractions(localLogs);
   }
 

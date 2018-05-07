@@ -142,11 +142,13 @@ module Python
 	      mkdir_p x86 unless File.exists?(x86)
 	      mkdir_p amd64 unless File.exists?(amd64)
 
+	      cp Rake::Task['//cpp:noblur'].out, x86+"x_ignore_nofocus.so", :verbose => true
+	      cp Rake::Task['//cpp:noblur64'].out, amd64+"x_ignore_nofocus.so", :verbose => true
 	      cp Rake::Task['//javascript/atoms/fragments:is-displayed'].out, remote_py_home+"isDisplayed.js", :verbose => true
-	      cp Rake::Task['//javascript/webdriver/atoms:getAttribute'].out, remote_py_home+"getAttribute.js", :verbose => true
+	      cp Rake::Task['//javascript/webdriver/atoms:get-attribute'].out, remote_py_home+"getAttribute.js", :verbose => true
 
 	      cp Rake::Task['//javascript/firefox-driver:webdriver'].out, firefox_py_home, :verbose => true
-	      cp Rake::Task['//javascript/firefox-driver:webdriver_prefs'].out, firefox_py_home, :verbose => true
+	      cp Rake::Task['//javascript/firefox-driver:webdriver_prefs'].out, firefox_py_home+"webdriver_prefs.json", :verbose => true
       end
     end
   end

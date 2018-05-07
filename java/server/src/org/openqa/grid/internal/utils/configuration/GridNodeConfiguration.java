@@ -17,38 +17,32 @@
 
 package org.openqa.grid.internal.utils.configuration;
 
-import com.google.common.collect.Lists;
-import com.google.common.reflect.TypeToken;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonDeserializationContext;
-import com.google.gson.JsonDeserializer;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParseException;
-import com.google.gson.JsonSerializationContext;
-import com.google.gson.JsonSerializer;
+import static org.openqa.selenium.json.Json.MAP_TYPE;
+
 import com.google.gson.annotations.Expose;
 
-import com.beust.jcommander.Parameter;
-
-import org.openqa.grid.common.JSONConfigurationUtils;
+import org.openqa.grid.common.RegistrationRequest;
+import org.openqa.grid.common.SeleniumProtocol;
 import org.openqa.grid.common.exception.GridConfigurationException;
-import org.openqa.grid.internal.utils.configuration.converters.BrowserDesiredCapabilityConverter;
-import org.openqa.grid.internal.utils.configuration.converters.NoOpParameterSplitter;
-import org.openqa.grid.internal.utils.configuration.validators.FileExistsValueValidator;
-import org.openqa.selenium.remote.BeanToJsonConverter;
-import org.openqa.selenium.remote.DesiredCapabilities;
-import org.openqa.selenium.remote.JsonToBeanConverter;
+import org.openqa.selenium.MutableCapabilities;
+import org.openqa.selenium.Platform;
+import org.openqa.selenium.json.JsonInput;
+import org.openqa.selenium.net.NetworkUtils;
+import org.openqa.selenium.remote.CapabilityType;
 
-import java.lang.reflect.Type;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 public class GridNodeConfiguration extends GridConfiguration {
-  public static final String DEFAULT_NODE_CONFIG_FILE = "defaults/DefaultNodeWebDriver.json";
+  public static final String DEFAULT_NODE_CONFIG_FILE = "org/openqa/grid/common/defaults/DefaultNodeWebDriver.json";
+  public static final String CONFIG_UUID_CAPABILITY = "server:CONFIG_UUID";
 
   /*
    * IMPORTANT - Keep these constant values in sync with the ones specified in
@@ -113,26 +107,38 @@ public class GridNodeConfiguration extends GridConfiguration {
   /**
    * Default DesiredCapabilites
    */
+  // TODO: Is this really necessary?
   static final class DefaultDesiredCapabilitiesBuilder {
-    static final List<DesiredCapabilities> getCapabilities() {
-      DesiredCapabilities chrome = new DesiredCapabilities();
-      chrome.setBrowserName("chrome");
-      chrome.setCapability("maxInstances", 5);
-      chrome.setCapability("seleniumProtocol", "WebDriver");
+    static List<MutableCapabilities> getCapabilities() {
+      try (JsonInput jsonInput = loadJsonFromResourceOrFile(DEFAULT_NODE_CONFIG_FILE)) {
+        List<MutableCapabilities> caps = new ArrayList<>();
 
-      DesiredCapabilities firefox = new DesiredCapabilities();
-      firefox.setBrowserName("firefox");
-      firefox.setCapability("maxInstances", 5);
-      firefox.setCapability("seleniumProtocol", "WebDriver");
+        Map<String, Object> defaults = jsonInput.read(MAP_TYPE);
+        if (defaults == null || !(defaults.get("capabilities") instanceof Collection)) {
+          return caps;
+        }
 
-      DesiredCapabilities ie = new DesiredCapabilities();
-      ie.setBrowserName("internet explorer");
-      ie.setCapability("maxInstances", 1);
-      ie.setCapability("seleniumProtocol", "WebDriver");
-
-      return Lists.newArrayList(chrome, firefox, ie);
+        for (Object el : (Collection<?>) defaults.get("capabilities")) {
+          @SuppressWarnings("unchecked")
+          Map<String, Object> map = (Map<String, Object>) el;
+          caps.add(new MutableCapabilities(map));
+        }
+        return caps;
+      }
     }
   }
+
+  private static class HostPort {
+    final String host;
+    final int port;
+
+    HostPort(String host, int port) {
+      this.host = host;
+      this.port = port;
+    }
+  }
+
+  private HostPort hubHostPort;
 
   /*
    * config parameters which do not serialize or de-serialize
@@ -141,20 +147,18 @@ public class GridNodeConfiguration extends GridConfiguration {
   /**
    * Node specific json config file to use. Defaults to {@code null}.
    */
-  @Parameter(
-    names = "-nodeConfig",
-    description = "<String> filename : JSON configuration file for the node. Overrides default values",
-    validateValueWith = FileExistsValueValidator.class
-  )
   public String nodeConfigFile;
 
   /*
    * config parameters which do not serialize to json
    */
 
-  // remoteHost is a generated value based on host / port specified, or read from JSON.
-  @Expose( serialize = false )
-  String remoteHost;
+  /**
+   * The address to report to the hub. By default it's generated based on the host and port specified.
+   * Setting a value overrides the default (http://<host>:<port>).
+   */
+  @Expose
+  public String remoteHost;
 
   // used to read a Selenium 2.x nodeConfig.json file and throw a friendly exception
   @Expose( serialize = false )
@@ -169,30 +173,18 @@ public class GridNodeConfiguration extends GridConfiguration {
    * The host name or IP of the hub. Defaults to {@code null}.
    */
   @Expose
-  @Parameter(
-    names = "-hubHost",
-    description = "<String> IP or hostname : the host address of the hub we're attempting to register with. If -hub is specified the -hubHost is determined from it."
-  )
-  String hubHost;
+  public String hubHost;
 
   /**
    * The port of the hub. Defaults to {@code null}.
    */
   @Expose
-  @Parameter(
-    names = "-hubPort",
-    description = "<Integer> : the port of the hub we're attempting to register with. If -hub is specified the -hubPort is determined from it."
-  )
-  Integer hubPort;
+  public Integer hubPort;
 
   /**
    * The id tu use for this node. Automatically generated when {@code null}. Defaults to {@code null}.
    */
   @Expose
-  @Parameter(
-    names = "-id",
-    description = "<String> : optional unique identifier for the node. Defaults to the url of the remoteHost, when not specified."
-  )
   public String id;
 
   /**
@@ -201,95 +193,61 @@ public class GridNodeConfiguration extends GridConfiguration {
    * can not be loaded.
    */
   @Expose
-  @Parameter(
-    names = { "-capabilities", "-browser" },
-    description = "<String> : comma separated Capability values. Example: -capabilities browserName=firefox,platform=linux -capabilities browserName=chrome,platform=linux",
-    listConverter = BrowserDesiredCapabilityConverter.class,
-    converter = BrowserDesiredCapabilityConverter.class,
-    splitter = NoOpParameterSplitter.class
-  )
-  public List<DesiredCapabilities> capabilities = DefaultDesiredCapabilitiesBuilder.getCapabilities();
+  public List<MutableCapabilities> capabilities = DefaultDesiredCapabilitiesBuilder.getCapabilities();
 
   /**
    * The down polling limit for the node. Defaults to {@code null}.
    */
   @Expose
-  @Parameter(
-    names = "-downPollingLimit",
-    description = "<Integer> : node is marked as \"down\" if the node hasn't responded after the number of checks specified in [downPollingLimit]."
-  )
   public Integer downPollingLimit = DEFAULT_DOWN_POLLING_LIMIT;
 
   /**
    * The hub url. Defaults to {@code http://localhost:4444}.
    */
   @Expose
-  @Parameter(
-    names = "-hub",
-    description = "<String> : the url that will be used to post the registration request. This option takes precedence over -hubHost and -hubPort options."
-  )
   public String hub = DEFAULT_HUB;
 
   /**
    * How often to pull the node. Defaults to 5000 ms
    */
   @Expose
-  @Parameter(
-    names = "-nodePolling",
-    description = "<Integer> in ms : specifies how often the hub will poll to see if the node is still responding."
-  )
   public Integer nodePolling = DEFAULT_POLLING_INTERVAL;
 
   /**
    * When to time out a node status check. Defaults is after 5000 ms.
    */
   @Expose
-  @Parameter(
-    names = "-nodeStatusCheckTimeout",
-    description = "<Integer> in ms : connection/socket timeout, used for node \"nodePolling\" check."
-  )
   public Integer nodeStatusCheckTimeout = DEFAULT_NODE_STATUS_CHECK_TIMEOUT;
 
   /**
    * The proxy class name to use. Defaults to org.openqa.grid.selenium.proxy.DefaultRemoteProxy.
    */
   @Expose
-  @Parameter(
-    names = "-proxy",
-    description = "<String> : the class used to represent the node proxy. Default is [org.openqa.grid.selenium.proxy.DefaultRemoteProxy]."
-  )
   public String proxy = DEFAULT_PROXY;
 
   /**
    * Whether to register this node with the hub. Defaults to {@code true}
    */
   @Expose
-  @Parameter(
-    names = "-register",
-    description = "if specified, node will attempt to re-register itself automatically with its known grid hub if the hub becomes unavailable.",
-    arity = 1
-  )
   public Boolean register = DEFAULT_REGISTER_TOGGLE;
 
   /**
    * How often to re-register this node with the hub. Defaults to every 5000 ms.
    */
   @Expose
-  @Parameter(
-    names = "-registerCycle",
-    description = "<Integer> in ms : specifies how often the node will try to register itself again. Allows administrator to restart the hub without restarting (or risk orphaning) registered nodes. Must be specified with the \"-register\" option."
-  )
   public Integer registerCycle = DEFAULT_REGISTER_CYCLE;
 
   /**
    * How long to wait before marking this node down. Defaults is 60000 ms.
    */
   @Expose
-  @Parameter(
-    names = "-unregisterIfStillDownAfter",
-    description = "<Integer> in ms : if the node remains down for more than [unregisterIfStillDownAfter] ms, it will stop attempting to re-register from the hub."
-  )
   public Integer unregisterIfStillDownAfter = DEFAULT_UNREGISTER_DELAY;
+
+  /**
+   * Whether or not to drop capabilities that does not belong to the current platform family
+   */
+  @Expose
+  public boolean enablePlatformVerification = true;
 
   /**
    * Creates a new configuration using the default values.
@@ -302,23 +260,41 @@ public class GridNodeConfiguration extends GridConfiguration {
   }
 
   public String getHubHost() {
-    if (hubHost == null) {
-      if (hub == null) {
-        throw new RuntimeException("You must specify either a hubHost or hub parameter.");
-      }
-      parseHubUrl();
-    }
-    return hubHost;
+    return getHubHostPort().host;
   }
 
   public Integer getHubPort() {
-    if (hubPort == null) {
-      if (hub == null) {
-        throw new RuntimeException("You must specify either a hubPort or hub parameter.");
+    return getHubHostPort().port;
+  }
+
+  private HostPort getHubHostPort() {
+    if (hubHostPort == null) { // parse options
+      // -hub has precedence
+      if (hub != null) {
+        try {
+          URL u = new URL(hub);
+          hubHostPort = new HostPort(u.getHost(), u.getPort());
+        } catch (MalformedURLException mURLe) {
+          throw new RuntimeException("-hub must be a valid url: " + hub, mURLe);
+        }
+      } else if (hubHost != null || hubPort != null) {
+        if (hubHost == null) {
+          throw new RuntimeException("You must specify either a -hubHost or -hub parameter.");
+        }
+        if (hubPort == null) {
+          throw new RuntimeException("You must specify either a -hubPort or -hub parameter.");
+        }
+        hubHostPort = new HostPort(hubHost, hubPort);
+      } else {
+        try {
+          URL u = new URL(hub);
+          hubHostPort = new HostPort(u.getHost(), u.getPort());
+        } catch (MalformedURLException mURLe) {
+          throw new RuntimeException("-hub must be a valid url: " + hub, mURLe);
+        }
       }
-      parseHubUrl();
     }
-    return hubPort;
+    return hubHostPort;
   }
 
   public String getRemoteHost() {
@@ -332,16 +308,6 @@ public class GridNodeConfiguration extends GridConfiguration {
       remoteHost = "http://" + host + ":" + port;
     }
     return remoteHost;
-  }
-
-  private void parseHubUrl() {
-    try {
-      URL u = new URL(hub);
-      hubHost = u.getHost();
-      hubPort = u.getPort();
-    } catch (MalformedURLException mURLe) {
-      throw new RuntimeException("-hub must be a valid url: " + hub, mURLe);
-    }
   }
 
   public void merge(GridNodeConfiguration other) {
@@ -418,26 +384,23 @@ public class GridNodeConfiguration extends GridConfiguration {
    * @param filePath node config json file to load configuration from
    */
   public static GridNodeConfiguration loadFromJSON(String filePath) {
-    return loadFromJSON(JSONConfigurationUtils.loadJSON(filePath));
+    return loadFromJSON(StandaloneConfiguration.loadJsonFromResourceOrFile(filePath));
   }
 
-  /**
-   * @param json JsonObject to load configuration from
-   */
-  public static GridNodeConfiguration loadFromJSON(JsonObject json) {
+  public static GridNodeConfiguration loadFromJSON(JsonInput jsonInput) {
     try {
-      GsonBuilder builder = new GsonBuilder();
-      GridNodeConfiguration.staticAddJsonTypeAdapter(builder);
-      GridNodeConfiguration config =
-        builder.excludeFieldsWithoutExposeAnnotation().create().fromJson(json, GridNodeConfiguration.class);
+      GridNodeConfiguration config = StandaloneConfiguration.loadFromJson(
+          jsonInput,
+          GridNodeConfiguration.class);
 
       if (config.configuration != null) {
         // caught below
-        throw new GridConfigurationException("Deprecated -nodeConfig file encountered. Please update"
-                                             + " the file to work with Selenium 3. See https://github.com"
-                                             + "/SeleniumHQ/selenium/wiki/Grid2#configuring-the-nodes-by-json"
-                                             + " for more details.");
-}
+        throw new GridConfigurationException(
+            "Deprecated -nodeConfig file encountered.Please update" +
+                " the file to work with Selenium 3.See https://github.com" +
+                "/SeleniumHQ/selenium/wiki/Grid2#configuring-the-nodes-by-json" +
+                " for more details.");
+        }
 
       return config;
     } catch (Throwable e) {
@@ -446,52 +409,51 @@ public class GridNodeConfiguration extends GridConfiguration {
     }
   }
 
-  @Override
-  protected void addJsonTypeAdapter(GsonBuilder builder) {
-    super.addJsonTypeAdapter(builder);
-    GridNodeConfiguration.staticAddJsonTypeAdapter(builder);
-  }
-
-  protected static void staticAddJsonTypeAdapter(GsonBuilder builder) {
-    builder.registerTypeAdapter(new TypeToken<List<DesiredCapabilities>>(){}.getType(),
-                                new CollectionOfDesiredCapabilitiesSerializer());
-    builder.registerTypeAdapter(new TypeToken<List<DesiredCapabilities>>(){}.getType(),
-                                new CollectionOfDesiredCapabilitiesDeSerializer());
-  }
-
-  public static class CollectionOfDesiredCapabilitiesSerializer
-    implements JsonSerializer<List<DesiredCapabilities>> {
-
-    @Override
-    public JsonElement serialize(List<DesiredCapabilities> desiredCapabilities, Type type,
-                                 JsonSerializationContext jsonSerializationContext) {
-
-      JsonArray capabilities = new JsonArray();
-      BeanToJsonConverter converter = new BeanToJsonConverter();
-      for (DesiredCapabilities dc : desiredCapabilities) {
-        capabilities.add(converter.convertObject(dc));
-      }
-      return capabilities;
+  public void fixUpCapabilities() {
+    if (capabilities == null) {
+      return; // assumes the caller set it/wants it this way
     }
+
+    Platform current = Platform.getCurrent();
+    capabilities = capabilities.stream()
+        .peek(cap -> cap.setCapability(
+            CapabilityType.PLATFORM,
+            Optional.ofNullable(cap.getCapability(CapabilityType.PLATFORM_NAME)).orElse(
+                Optional.ofNullable(cap.getCapability(CapabilityType.PLATFORM)).orElse(current))))
+        .peek(cap -> cap.setCapability(
+            CapabilityType.PLATFORM_NAME,
+            Optional.ofNullable(cap.getCapability(CapabilityType.PLATFORM_NAME)).orElse(
+                Optional.ofNullable(cap.getCapability(CapabilityType.PLATFORM)).orElse(current))))
+        .peek(cap -> cap.setCapability(RegistrationRequest.SELENIUM_PROTOCOL,
+            Optional.ofNullable(cap.getCapability(RegistrationRequest.SELENIUM_PROTOCOL))
+                .orElse(SeleniumProtocol.WebDriver.toString())))
+        .peek(cap -> cap.setCapability(CONFIG_UUID_CAPABILITY, UUID.randomUUID().toString()))
+        .collect(Collectors.toList());
   }
 
-  public  static class CollectionOfDesiredCapabilitiesDeSerializer
-    implements JsonDeserializer<List<DesiredCapabilities>> {
+  public void dropCapabilitiesThatDoesNotMatchCurrentPlatform() {
+    if (!enablePlatformVerification) {
+      return;
+    }
 
-    @Override
-    public List<DesiredCapabilities> deserialize(JsonElement jsonElement, Type type,
-                                                 JsonDeserializationContext jsonDeserializationContext)
-      throws JsonParseException {
+    if (capabilities == null) {
+      return; // assumes the caller set it/wants it this way
+    }
 
-      if (jsonElement.isJsonArray()) {
-        List<DesiredCapabilities> desiredCapabilities = new ArrayList<>();
-        JsonToBeanConverter converter = new JsonToBeanConverter();
-        for (JsonElement arrayElement : jsonElement.getAsJsonArray()) {
-          desiredCapabilities.add(converter.convert(DesiredCapabilities.class, arrayElement));
-        }
-        return desiredCapabilities;
-      }
-      throw new JsonParseException("capabilities should be expressed as an array of objects.");
+    Platform current = Platform.getCurrent();
+    Platform currentFamily = Optional.ofNullable(current.family()).orElse(current);
+    capabilities = capabilities.stream()
+        .filter(cap -> cap.getPlatform() != null
+                       && (cap.getPlatform() == Platform.ANY || cap.getPlatform().is(currentFamily)))
+        .collect(Collectors.toList());
+  }
+
+  public void fixUpHost() {
+    NetworkUtils util = new NetworkUtils();
+    if (host == null || "ip".equalsIgnoreCase(host)) {
+      host = util.getIp4NonLoopbackAddressOfThisMachine().getHostAddress();
+    } else if ("host".equalsIgnoreCase(host)) {
+      host = util.getIp4NonLoopbackAddressOfThisMachine().getHostName();
     }
   }
 }

@@ -15,7 +15,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-
 package org.openqa.selenium.io;
 
 import java.io.BufferedOutputStream;
@@ -57,20 +56,21 @@ public class Zip {
         }
       }
     } else {
-      FileInputStream fis = new FileInputStream(toAdd);
-      String name = toAdd.getAbsolutePath().substring(basePath.length() + 1);
+      try (FileInputStream fis = new FileInputStream(toAdd)) {
+        String name = toAdd.getAbsolutePath().substring(basePath.length() + 1);
 
-      ZipEntry entry = new ZipEntry(name.replace('\\', '/'));
-      zos.putNextEntry(entry);
+        ZipEntry entry = new ZipEntry(name.replace('\\', '/'));
+        zos.putNextEntry(entry);
 
-      int len;
-      byte[] buffer = new byte[4096];
-      while ((len = fis.read(buffer)) != -1) {
-        zos.write(buffer, 0, len);
+
+        int len;
+        byte[] buffer = new byte[4096];
+        while ((len = fis.read(buffer)) != -1) {
+          zos.write(buffer, 0, len);
+        }
+
+        zos.closeEntry();
       }
-
-      fis.close();
-      zos.closeEntry();
     }
   }
 

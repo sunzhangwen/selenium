@@ -1,5 +1,3 @@
-# encoding: utf-8
-#
 # Licensed to the Software Freedom Conservancy (SFC) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -20,7 +18,6 @@
 require 'rubygems'
 require 'time'
 require 'rspec'
-require 'ci/reporter/rspec'
 
 require 'selenium-webdriver'
 require_relative 'spec_support'
@@ -29,15 +26,13 @@ include Selenium
 
 GlobalTestEnv = WebDriver::SpecSupport::TestEnvironment.new
 
-class Object
-  include WebDriver::SpecSupport::Guards
-end
-
 RSpec.configure do |c|
   c.include(WebDriver::SpecSupport::Helpers)
+
   c.before(:suite) do
     $DEBUG ||= ENV['DEBUG'] == 'true'
     GlobalTestEnv.remote_server.start if GlobalTestEnv.driver == :remote
+    GlobalTestEnv.print_env
   end
 
   c.after(:suite) do
@@ -45,10 +40,22 @@ RSpec.configure do |c|
   end
 
   c.filter_run focus: true if ENV['focus']
+
+  c.before do |example|
+    guards = WebDriver::SpecSupport::Guards.new(example)
+    if guards.exclude.any?
+      skip 'Bug Prevents Execution.'
+    elsif guards.except.satisfied.any? || guards.only.unsatisfied.any?
+      pending 'Guarded.'
+    end
+  end
+
+  c.after do |example|
+    result = example.execution_result
+    reset_driver! if result.exception || result.pending_exception
+  end
 end
 
 WebDriver::Platform.exit_hook { GlobalTestEnv.quit }
 
 $stdout.sync = true
-GlobalTestEnv.unguarded = ENV['noguards'] == 'true'
-WebDriver::SpecSupport::Guards.print_env

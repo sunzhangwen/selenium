@@ -1,3 +1,4 @@
+# BUILD FILE SYNTAX: SKYLARK
 java_test(name = 'small-tests',
   srcs = [
     'SmallTests.java',
@@ -35,6 +36,7 @@ java_library(name = 'helpers',
     'ParallelTestRunner.java',
     'StubDriver.java',
     'WaitingConditions.java',
+    'WrappedWebElement.java',
   ],
   deps = [
     '//java/client/src/org/openqa/selenium:selenium',
@@ -81,40 +83,15 @@ java_library(name = 'tests',
     '//java/client/src/org/openqa/selenium/support/ui:wait',
     '//java/client/test/org/openqa/selenium/testing:test-base',
     '//java/client/test/org/openqa/selenium/testing/drivers:drivers',
+    '//third_party/java/gson:gson',
     '//third_party/java/guava:guava',
-    '//third_party/java/hamcrest:hamcrest-core',
     '//third_party/java/hamcrest:hamcrest-library',
     '//third_party/java/jetty:jetty',
     '//third_party/java/junit:junit',
-    '//third_party/java/mockito:mockito',
-    '//third_party/java/servlet:servlet-api',
+    '//third_party/java/mockito:mockito-core',
+    '//third_party/java/servlet:javax.servlet-api',
   ],
   visibility = [
     '//java/client/test/...',
-  ],
-)
-
-java_binary(name = 'dump-ignores',
-  main_class = 'org.openqa.selenium.internal.IgnoredTestPrinter',
-  deps = [
-    ':ignored-test-printer',
-  ],
-)
-
-java_library(name = 'ignored-test-printer',
-  srcs = [
-    'internal/IgnoreCollector.java',
-    'internal/IgnoredTestCallback.java',
-    'internal/IgnoredTestPrinter.java',
-  ],
-  deps = [
-    ':large-tests',
-    '//java/client/src/org/openqa/selenium:selenium',
-    '//java/client/test/org/openqa/selenium/testing:test-base',
-    '//java/client/test/org/openqa/selenium/testing/drivers:browser',
-    '//java/client/test/org/openqa/selenium/testing/drivers:drivers',
-    '//third_party/java/gson:gson',
-    '//third_party/java/guava:guava',
-    '//third_party/java/junit:junit',
   ],
 )

@@ -17,7 +17,6 @@
 
 package org.openqa.selenium;
 
-import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
@@ -30,13 +29,11 @@ import org.openqa.selenium.logging.GetLogsTest;
 import org.openqa.selenium.logging.PerformanceLogTypeTest;
 import org.openqa.selenium.logging.PerformanceLoggingTest;
 import org.openqa.selenium.support.ui.SelectElementTest;
-import org.openqa.selenium.testing.JUnit4TestBase;
 
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
     AlertsTest.class,
     AtomsInjectionTest.class,
-    AuthenticatedPageLoadingTest.class,
     AvailableLogsTest.class,
     ByTest.class,
     ChildrenFindingTest.class,
@@ -96,10 +93,5 @@ public class StandardSeleniumTests {
   @BeforeClass
   public static void prepareCommonEnvironment() {
     GlobalTestEnvironment.get(InProcessTestEnvironment.class);
-  }
-
-  @AfterClass
-  public static void cleanUpDriver() {
-    JUnit4TestBase.removeDriver();
   }
 }

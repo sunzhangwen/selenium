@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using NUnit.Framework;
 using System.Collections.ObjectModel;
@@ -219,7 +219,7 @@ namespace OpenQA.Selenium
                 return;
 
             driver.Url = xhtmlTestPage;
-            Assert.Throws<InvalidOperationException>(() => ExecuteScript("return squiggle();"));
+            Assert.That(() => ExecuteScript("return squiggle();"), Throws.InstanceOf<WebDriverException>());
         }
 
         [Test]
@@ -435,7 +435,8 @@ namespace OpenQA.Selenium
         public void ShouldBeAbleToExecuteABigChunkOfJavascriptCode()
         {
             driver.Url = javascriptPage;
-            string[] fileList = System.IO.Directory.GetFiles("..\\..", "jquery-1.2.6.min.js", System.IO.SearchOption.AllDirectories);
+            string path = System.IO.Path.Combine(Environment.EnvironmentManager.Instance.CurrentDirectory, "..\\..");
+            string[] fileList = System.IO.Directory.GetFiles(path, "jquery-1.2.6.min.js", System.IO.SearchOption.AllDirectories);
             if (fileList.Length > 0)
             {
                 string jquery = System.IO.File.ReadAllText(fileList[0]);
@@ -511,6 +512,7 @@ namespace OpenQA.Selenium
         [IgnoreBrowser(Browser.Android, "Android not tested")]
         [IgnoreBrowser(Browser.Opera, "Opera obeys the method contract.")]
         [IgnoreBrowser(Browser.HtmlUnit, "HtmlUnit obeys the method contract.")]
+        [IgnoreBrowser(Browser.Firefox)]
         public void ShouldBeAbleToPassADictionaryAsAParameter()
         {
             driver.Url = simpleTestPage;

@@ -1,5 +1,3 @@
-# encoding: utf-8
-#
 # Licensed to the Software Freedom Conservancy (SFC) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -191,8 +189,6 @@ module Selenium
           else
             raise ArgumentError, "unsupported proxy type #{proxy.type}"
           end
-
-          proxy
         end
 
         def encoded
@@ -214,7 +210,7 @@ module Selenium
           destination = File.join(directory, 'extensions')
 
           @extensions.each do |name, extension|
-            WebDriver.logger.info({extenstion: name}.inspect)
+            WebDriver.logger.debug({extenstion: name}.inspect)
             extension.write_to(destination)
           end
         end

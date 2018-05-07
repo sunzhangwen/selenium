@@ -20,9 +20,13 @@ package org.openqa.selenium.firefox;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
+import com.google.auto.service.AutoService;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.io.ByteStreams;
 
+//import org.apache.commons.io.output.NullOutputStream;
+import org.openqa.selenium.Capabilities;
 import org.openqa.selenium.WebDriverException;
 import org.openqa.selenium.net.PortProber;
 import org.openqa.selenium.remote.service.DriverService;
@@ -65,7 +69,28 @@ public class GeckoDriverService extends DriverService {
    * @return A new GeckoDriverService using the default configuration.
    */
   public static GeckoDriverService createDefaultService() {
-    return new Builder().usingAnyFreePort().build();
+    return new Builder().build();
+  }
+
+  static GeckoDriverService createDefaultService(Capabilities caps) {
+    Builder builder = new Builder();
+
+    Object binary = caps.getCapability(FirefoxDriver.BINARY);
+    if (binary != null) {
+      FirefoxBinary actualBinary;
+      if (binary instanceof FirefoxBinary) {
+        actualBinary = (FirefoxBinary) binary;
+      } else if (binary instanceof String) {
+        actualBinary = new FirefoxBinary(new File(String.valueOf(binary)));
+      } else {
+        throw new IllegalArgumentException(
+            "Expected binary to be a string or a binary: " + binary);
+      }
+
+      builder.usingFirefoxBinary(actualBinary);
+    }
+
+    return new Builder().build();
   }
 
   @Override
@@ -73,9 +98,15 @@ public class GeckoDriverService extends DriverService {
     PortProber.waitForPortUp(getUrl().getPort(), 20, SECONDS);
   }
 
+  @Override
+  protected boolean hasShutdownEndpoint() {
+    return false;
+  }
+
   /**
    * Builder used to configure new {@link GeckoDriverService} instances.
    */
+  @AutoService(DriverService.Builder.class)
   public static class Builder extends DriverService.Builder<
     GeckoDriverService, GeckoDriverService.Builder> {
 
@@ -132,17 +163,25 @@ public class GeckoDriverService extends DriverService {
                                                      ImmutableMap<String, String> environment) {
       try {
         GeckoDriverService service = new GeckoDriverService(exe, port, args, environment);
-        if (getLogFile() !=  null) {
-          service.sendOutputTo(new FileOutputStream(getLogFile()));
-        } else {
-          String firefoxLogFile = System.getProperty(FirefoxDriver.SystemProperty.BROWSER_LOGFILE);
-          if (firefoxLogFile != null) {
-            if ("/dev/stdout".equals(firefoxLogFile)) {
-              service.sendOutputTo(System.out);
-            }
+        String firefoxLogFile = System.getProperty(FirefoxDriver.SystemProperty.BROWSER_LOGFILE);
+        if (firefoxLogFile != null) { // System property has higher precedence
+          if ("/dev/stdout".equals(firefoxLogFile)) {
+            service.sendOutputTo(System.out);
+          } else if ("/dev/stderr".equals(firefoxLogFile)) {
+            service.sendOutputTo(System.err);
+          } else if ("/dev/null".equals(firefoxLogFile)) {
+            service.sendOutputTo(ByteStreams.nullOutputStream());
+          } else {
+            // TODO: The stream is leaked.
             service.sendOutputTo(new FileOutputStream(firefoxLogFile));
           }
-
+        } else {
+          if (getLogFile() != null) {
+            // TODO: This stream is leaked.
+            service.sendOutputTo(new FileOutputStream(getLogFile()));
+          } else {
+            service.sendOutputTo(System.err);
+          }
         }
         return service;
       } catch (IOException e) {

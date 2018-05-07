@@ -1,5 +1,3 @@
-# encoding: utf-8
-#
 # Licensed to the Software Freedom Conservancy (SFC) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -36,14 +34,23 @@ module Selenium
         private
 
         def start_process
-          server_command = [@executable_path, "--port=#{@port}", *@extra_args]
-          @process = ChildProcess.new(*server_command)
-          @process.io.stdout = @process.io.stderr = WebDriver.logger.io
+          @process = build_process(@executable_path, "--port=#{@port}", *@extra_args)
           @process.start
         end
 
         def cannot_connect_error_text
           "unable to connect to IE server #{@host}:#{@port}"
+        end
+
+        def extract_service_args(driver_opts)
+          driver_args = super
+          driver_args << "--log-level=#{driver_opts.delete(:log_level).to_s.upcase}" if driver_opts.key?(:log_level)
+          driver_args << "--log-file=#{driver_opts.delete(:log_file)}" if driver_opts.key?(:log_file)
+          driver_args << "--implementation=#{driver_opts.delete(:implementation).to_s.upcase}" if driver_opts.key?(:implementation)
+          driver_args << "--host=#{driver_opts.delete(:host)}" if driver_opts.key?(:host)
+          driver_args << "--extract_path=#{driver_opts.delete(:extract_path)}" if driver_opts.key?(:extract_path)
+          driver_args << "--silent" if driver_opts[:silent] == true
+          driver_args
         end
       end # Server
     end # IE

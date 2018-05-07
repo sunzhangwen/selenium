@@ -25,7 +25,7 @@ import org.junit.Test;
 import org.openqa.grid.common.GridRole;
 import org.openqa.grid.e2e.utils.GridTestHelper;
 import org.openqa.grid.e2e.utils.RegistryTestHelper;
-import org.openqa.grid.internal.Registry;
+import org.openqa.grid.internal.GridRegistry;
 import org.openqa.grid.internal.utils.SelfRegisteringRemote;
 import org.openqa.grid.internal.utils.configuration.GridHubConfiguration;
 import org.openqa.grid.web.Hub;
@@ -42,7 +42,7 @@ import org.openqa.selenium.remote.server.SeleniumServer;
 public class HubRestart {
 
   private Hub hub;
-  private Registry registry;
+  private GridRegistry registry;
   private SelfRegisteringRemote remote;
   private GridHubConfiguration config = new GridHubConfiguration();
 
@@ -50,6 +50,8 @@ public class HubRestart {
   public void prepare() throws Exception {
     config.host = "localhost";
     config.port = PortProber.findFreePort();
+    config.timeout = 10;
+    config.browserTimeout = 10;
     hub = GridTestHelper.getHub(config);
     registry = hub.getRegistry();
 
@@ -59,7 +61,6 @@ public class HubRestart {
 
     remote.setRemoteServer(new SeleniumServer(remote.getConfiguration()));
     remote.startRemoteServer();
-
   }
 
   @Test(timeout = 5000)
@@ -72,6 +73,9 @@ public class HubRestart {
     // should be up
     RegistryTestHelper.waitForNode(hub.getRegistry(), 1);
 
+    assertEquals(remote.getConfiguration().timeout.intValue(), 10);
+    assertEquals(remote.getConfiguration().browserTimeout.intValue(), 10);
+
     // crashing the hub.
     hub.stop();
 
@@ -79,6 +83,8 @@ public class HubRestart {
     Thread.sleep(1000);
 
     // and starting a new hub
+    config.timeout = 20;
+    config.browserTimeout = 20;
     hub = new Hub(config);
     registry = hub.getRegistry();
     // should be empty
@@ -88,6 +94,8 @@ public class HubRestart {
     // the node will appear again after 250 ms.
     RegistryTestHelper.waitForNode(hub.getRegistry(), 1);
 
+    assertEquals(remote.getConfiguration().timeout.intValue(), 20);
+    assertEquals(remote.getConfiguration().browserTimeout.intValue(), 20);
   }
 
   @After

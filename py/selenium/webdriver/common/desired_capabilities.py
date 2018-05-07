@@ -49,17 +49,14 @@ class DesiredCapabilities(object):
 
     FIREFOX = {
         "browserName": "firefox",
-        "version": "",
-        "platform": "ANY",
-        "javascriptEnabled": True,
         "marionette": True,
+        "acceptInsecureCerts": True,
     }
 
     INTERNETEXPLORER = {
         "browserName": "internet explorer",
         "version": "",
         "platform": "WINDOWS",
-        "javascriptEnabled": True,
     }
 
     EDGE = {
@@ -72,21 +69,18 @@ class DesiredCapabilities(object):
         "browserName": "chrome",
         "version": "",
         "platform": "ANY",
-        "javascriptEnabled": True,
     }
 
     OPERA = {
         "browserName": "opera",
         "version": "",
         "platform": "ANY",
-        "javascriptEnabled": True,
     }
 
     SAFARI = {
         "browserName": "safari",
         "version": "",
         "platform": "MAC",
-        "javascriptEnabled": True,
     }
 
     HTMLUNIT = {
@@ -106,21 +100,18 @@ class DesiredCapabilities(object):
         "browserName": "iPhone",
         "version": "",
         "platform": "MAC",
-        "javascriptEnabled": True,
     }
 
     IPAD = {
         "browserName": "iPad",
         "version": "",
         "platform": "MAC",
-        "javascriptEnabled": True,
     }
 
     ANDROID = {
         "browserName": "android",
         "version": "",
         "platform": "ANDROID",
-        "javascriptEnabled": True,
     }
 
     PHANTOMJS = {
@@ -128,4 +119,10 @@ class DesiredCapabilities(object):
         "version": "",
         "platform": "ANY",
         "javascriptEnabled": True,
+    }
+
+    WEBKITGTK = {
+        "browserName": "MiniBrowser",
+        "version": "",
+        "platform": "ANY",
     }

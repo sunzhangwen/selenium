@@ -29,8 +29,8 @@ public class KeyInput implements InputSource, Encodable {
 
   private final String name;
 
-  public KeyInput(Optional<String> name) {
-    this.name = name.orElse(UUID.randomUUID().toString());
+  public KeyInput(String name) {
+    this.name = Optional.ofNullable(name).orElse(UUID.randomUUID().toString());
   }
 
   @Override
@@ -50,7 +50,7 @@ public class KeyInput implements InputSource, Encodable {
   public Map<String, Object> encode() {
     Map<String, Object> toReturn = new HashMap<>();
 
-    toReturn.put("type", "key");
+    toReturn.put("type", getInputType().getType());
     toReturn.put("id", name);
 
     return toReturn;

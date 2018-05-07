@@ -23,11 +23,6 @@ py_test(
   browsers = [ "marionette" ])
 
 py_test(
-  name = "phantomjs_test",
-  deps = [ ":test_phantomjs" ],
-  browsers = [ "phantomjs" ])
-
-py_test(
   name = "blackberry_test",
   deps = [ ":test_blackberry" ],
   browsers = [ "blackberry" ])
@@ -66,7 +61,6 @@ py_test(
     "ie",
     "edge",
     "blackberry",
-    "phantomjs",
     "remote_firefox",
     "safari",
   ])
@@ -82,8 +76,10 @@ py_install(
 py_prep(
   name = "prep",
   deps = [
+    "//cpp:noblur",
+    "//cpp:noblur64",
     "//javascript/atoms/fragments:is-displayed",
     "//javascript/firefox-driver:webdriver",
     "//javascript/firefox-driver:webdriver_prefs",
-    "//javascript/webdriver/atoms:getAttribute"
+    "//javascript/webdriver/atoms:get-attribute"
   ])
